@@ -41,7 +41,7 @@
     if(!key) return;
     var v = (value === undefined) ? 'undefined' : String(value);
     try{
-      if(useLS){ window.localStorage.setItem(key, v); return; }
+      if(useLS){ window.localStorage.setItem(key, v); try{ if(window.FBBridge && typeof window.FBBridge.onLocalSet === 'function') window.FBBridge.onLocalSet(key, v); }catch(__e){} return; }
     }catch(e){
       useLS = false;
     }
@@ -52,7 +52,7 @@
     key = String(key||'');
     if(!key) return;
     try{
-      if(useLS){ window.localStorage.removeItem(key); return; }
+      if(useLS){ window.localStorage.removeItem(key); try{ if(window.FBBridge && typeof window.FBBridge.onLocalRemove === 'function') window.FBBridge.onLocalRemove(key); }catch(__e){} return; }
     }catch(e){
       useLS = false;
     }
