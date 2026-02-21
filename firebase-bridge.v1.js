@@ -10,7 +10,8 @@
     db:null,
     auth:null,
     storage:null,
-    sharedAdsUnsub:null
+    sharedAdsUnsub:null,
+    localBackupsUnsub:null
   };
 
   function log(){ try{ console.log.apply(console, ['[FBBridge]'].concat([].slice.call(arguments))); }catch(e){} }
@@ -31,6 +32,13 @@
       try{ state.storage = firebase.storage(); }catch(e){}
       state.ready = !!state.db;
       if(state.ready){
+        try{
+          // non-blocking warm sync for shared localStorage backups (signup/users/messages/etc.)
+          setTimeout(function(){
+            try{ pullToLocalStorage(); }catch(e){}
+            try{ watchLocalStorageBackups(); }catch(e){}
+          }, 60);
+        }catch(e){}
         try{
           // non-blocking warm sync for shared ads (all users see same board)
           setTimeout(function(){
@@ -194,6 +202,51 @@
     }
   }
 
+
+  function watchLocalStorageBackups(){
+    if(state.localBackupsUnsub) return true;
+    if(!init() || !state.db) return false;
+    try{
+      var col = state.db.collection('app_backups').doc(getSchoolId()).collection('local_storage');
+      state.localBackupsUnsub = col.onSnapshot(function(qs){
+        try{
+          var changed = 0;
+          qs.docChanges().forEach(function(ch){
+            try{
+              var doc = ch.doc;
+              var d = (doc && doc.data) ? (doc.data() || {}) : {};
+              var k = (typeof d.key === 'string' && d.key) ? d.key : decodeURIComponent(String((doc && doc.id) || ''));
+              if(!k) return;
+              if(ch.type === 'removed'){
+                try{
+                  if(localStorage.getItem(k) != null){
+                    localStorage.removeItem(k);
+                    changed++;
+                  }
+                }catch(_e){}
+                return;
+              }
+              var v = (typeof d.value === 'string') ? d.value : '';
+              try{
+                var cur = localStorage.getItem(k);
+                if(cur === v) return;
+                localStorage.setItem(k, v);
+                changed++;
+              }catch(_e2){}
+            }catch(_inner){}
+          });
+          if(changed){
+            try{ window.dispatchEvent(new CustomEvent('fb-local-updated', { detail:{ changed:changed, source:'cloud-watch' } })); }catch(e){}
+          }
+        }catch(e){}
+      }, function(err){ log('watchLocalStorageBackups snapshot err', err); });
+      return true;
+    }catch(e){
+      log('watchLocalStorageBackups fail', e);
+      return false;
+    }
+  }
+
   function pullToLocalStorage(){
     if(!init() || !state.db) return Promise.resolve(0);
     var col = state.db.collection('app_backups').doc(getSchoolId()).collection('local_storage');
@@ -208,6 +261,7 @@
           }
         }catch(e){}
       });
+      try{ if(count){ window.dispatchEvent(new CustomEvent('fb-local-updated', { detail:{ changed:count, source:'cloud-pull' } })); } }catch(e){}
       return count;
     });
   }
@@ -220,7 +274,9 @@
     flush:flushQueue,
     syncAllLocalStorage:syncAllLocalStorage,
     pullToLocalStorage:pullToLocalStorage,
+    watchLocalStorageBackups:watchLocalStorageBackups,
     saveSharedAdsJson:saveSharedAdsJson,
+    uploadAdMedia:uploadAdMedia,
     syncSharedAdsNow:syncSharedAdsNow,
     watchSharedAds:watchSharedAds,
     enable:function(v){ state.enabled = (v !== false); return state.enabled; }

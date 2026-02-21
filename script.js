@@ -17595,7 +17595,17 @@ if(document.readyState === "loading"){
   function saveAds(arr){
     var __json = JSON.stringify(arr||[]);
     try{ localStorage.setItem(LS_KEY, __json); }catch(e){}
-    try{ if(window.FBBridge && typeof window.FBBridge.saveSharedAdsJson === "function"){ window.FBBridge.saveSharedAdsJson(__json); } }catch(e){}
+    
+try{
+  if(window.FBBridge && typeof window.FBBridge.saveSharedAdsJson === "function"){
+    // Avoid Firestore doc size limit (1MiB). If still too large (e.g., data: URLs), skip cloud push.
+    if(__json && __json.length > 750000){
+      try{ console.warn("adsBoardItems too large for cloud sync; keep local only"); }catch(e){}
+    }else{
+      window.FBBridge.saveSharedAdsJson(__json);
+    }
+  }
+}catch(e){}
   }
 
   function stopCarousel(){
@@ -18364,6 +18374,37 @@ if(miniBtn){
       return;
     }
 
+    if(window.FBBridge && typeof window.FBBridge.uploadSharedAdsFile === "function"){
+      if(hint) hint.textContent = "מעלה קובץ...";
+      try{
+        window.FBBridge.uploadSharedAdsFile(file, type).then(function(downloadUrl){
+          if(hint) hint.textContent = "";
+          finalizeWithSrc(downloadUrl || null);
+        }).catch(function(){
+          if(hint) hint.textContent = "שגיאה בהעלאה לענן.";
+        });
+      }catch(e){
+        if(hint) hint.textContent = "שגיאה בהעלאה לענן.";
+      }
+      return;
+    }
+
+    
+// Prefer Firebase Storage upload to avoid Firestore 1MB doc limit (base64 data URLs are huge)
+if(window.FBBridge && typeof window.FBBridge.uploadAdMedia === "function"){
+  try{
+    if(hint) hint.textContent = "מעלה לענן...";
+  }catch(e){}
+  var __adId = editingId ? editingId : ("ad_" + Date.now());
+  window.FBBridge.uploadAdMedia(file, __adId).then(function(downloadUrl){
+    if(!downloadUrl){
+      if(hint) hint.textContent = "שגיאה בהעלאה לענן.";
+      return;
+    }
+    finalizeWithSrc(String(downloadUrl));
+  }).catch(function(e){
+    // Fallback to local base64 (works locally but may not sync across devices if too large)
+    try{ if(hint) hint.textContent = "לא הצלחתי להעלות לענן, נשמר מקומית."; }catch(_e){}
     fileToDataUrl(file, function(err, dataUrl){
       if(err || !dataUrl){
         if(hint) hint.textContent = "שגיאה בקריאת הקובץ.";
@@ -18371,7 +18412,19 @@ if(miniBtn){
       }
       finalizeWithSrc(dataUrl);
     });
+  });
+  return;
+}
+
+// Fallback (no Firebase Storage): store as base64 in localStorage (may not sync across devices)
+fileToDataUrl(file, function(err, dataUrl){
+  if(err || !dataUrl){
+    if(hint) hint.textContent = "שגיאה בקריאת הקובץ.";
+    return;
   }
+  finalizeWithSrc(dataUrl);
+});
+}
 
   function mgrAdsDeleteFromModal(){
     if(!editingId) return;
