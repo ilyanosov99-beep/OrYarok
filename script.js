@@ -17593,7 +17593,9 @@ if(document.readyState === "loading"){
     return arr;
   }
   function saveAds(arr){
-    try{ localStorage.setItem(LS_KEY, JSON.stringify(arr||[])); }catch(e){}
+    var __json = JSON.stringify(arr||[]);
+    try{ localStorage.setItem(LS_KEY, __json); }catch(e){}
+    try{ if(window.FBBridge && typeof window.FBBridge.saveSharedAdsJson === "function"){ window.FBBridge.saveSharedAdsJson(__json); } }catch(e){}
   }
 
   function stopCarousel(){
@@ -18452,6 +18454,33 @@ if(miniBtn){
     document.addEventListener("DOMContentLoaded", setupAdsToggleIdleOpacity);
   }else{
     setTimeout(setupAdsToggleIdleOpacity, 0);
+  }
+
+  // Firebase shared ads board sync (all devices)
+  function __fbRefreshAdsFromCloud(){
+    try{
+      if(window.FBBridge && typeof window.FBBridge.syncSharedAdsNow === "function"){
+        window.FBBridge.syncSharedAdsNow(function(changed){
+          if(!changed) return;
+          try{ mgrAdsRenderList(); }catch(e){}
+          try{ showAt(0, false); }catch(e){}
+        });
+      }
+      if(window.FBBridge && typeof window.FBBridge.watchSharedAds === "function"){
+        window.FBBridge.watchSharedAds();
+      }
+    }catch(e){}
+  }
+  try{
+    window.addEventListener("fb-shared-ads-updated", function(){
+      try{ mgrAdsRenderList(); }catch(e){}
+      try{ showAt(0, false); }catch(e){}
+    });
+  }catch(e){}
+  if(document.readyState === "loading"){
+    document.addEventListener("DOMContentLoaded", function(){ setTimeout(__fbRefreshAdsFromCloud, 120); });
+  }else{
+    setTimeout(__fbRefreshAdsFromCloud, 120);
   }
 })(); 
 /* ===== Manager mode: menu-based navigation (no manager home page) ===== */
