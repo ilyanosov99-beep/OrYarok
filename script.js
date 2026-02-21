@@ -6403,8 +6403,12 @@ var __skipDockFocus = false;
           dockTarget.value = inp.value;
           try{ dockTarget.dispatchEvent(new Event("input",{bubbles:true})); }catch(e2){}
           try{ dockTarget.dispatchEvent(new Event("change",{bubbles:true})); }catch(e3){}
+          try{ inp.value = String(dockTarget.value ?? inp.value ?? ""); }catch(e4){}
+          requestAnimationFrame(function(){ try{ inp.value = String((dockTarget && dockTarget.value) ?? inp.value ?? ""); }catch(_e){} });
         }catch(e){}
       });
+      inp.addEventListener("keyup", function(){ try{ if(dockOpen && dockTarget) inp.value = String(dockTarget.value ?? inp.value ?? ""); }catch(e){} });
+      inp.addEventListener("change", function(){ try{ if(dockOpen && dockTarget) inp.value = String(dockTarget.value ?? inp.value ?? ""); }catch(e){} });
 
       var closeBtn = el("dockCloseBtn");
       if(closeBtn){
@@ -17063,6 +17067,15 @@ function bindBookTestOrder(){
       var overlay = $("btInsufficientOverlay");
       var alreadyOv = $("btAlreadyOverlay");
       var price = 400;
+
+      // close insufficient-balance overlay
+      try{
+        var ci = $("btInsufficientClose");
+        if(ci && !ci._bound){
+          ci._bound = 1;
+          ci.addEventListener("click", function(){ try{ closeOverlay(overlay); }catch(e){} }, {passive:true});
+        }
+      }catch(e){}
 
       function showAlready(){
         try{

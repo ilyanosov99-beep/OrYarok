@@ -108,8 +108,9 @@ body.scroll-locked{ position:fixed; left:0; right:0; width:100%; overflow:hidden
 
 body.popup-open #mainPage,
 body.page-open  #mainPage{
+  opacity:0 !important;
   pointer-events:none;
-  transition:opacity 180ms ease, visibility 0s linear 180ms;
+  transition:opacity .18s ease;
 }
 
 /* Home icons reveal while closing a sub-page (drag down) */
@@ -142,7 +143,7 @@ body.menu-open #mainPage{pointer-events:none;}
 }
 
 .overlay.overlay-dim{
-  background:rgba(0,0,0,.55);
+  background:rgba(0,0,0,.82);
   backdrop-filter: blur(2px);
   -webkit-backdrop-filter: blur(2px);
 }
@@ -5961,7 +5962,8 @@ body.pay-open .welcome-logo{ display:none !important; }
   --ads-frame-scaleX: 1.30;
 
   position:fixed;
-  top:130px;
+  top:clamp(120px, 18vh, 150px);
+  bottom:clamp(128px, 17vh, 170px);
   left:50%;
   transform:translateX(-50%);
   /* 9:16 like a phone screen (open state) */
