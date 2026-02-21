@@ -247,6 +247,51 @@
     }
   }
 
+
+
+  // ===== Firebase Storage uploads (shared ads media) =====
+  function _safeExtFromName(name, fb){
+    try{
+      var m = String(name||'').toLowerCase().match(/\.([a-z0-9]{2,8})$/);
+      return m ? m[1] : (fb || 'bin');
+    }catch(e){ return fb || 'bin'; }
+  }
+
+  function _guessAdType(file, typeHint){
+    try{
+      var mt = String((file && file.type) || '').toLowerCase();
+      if(typeHint === 'video' || mt.indexOf('video/') === 0) return 'video';
+      return 'image';
+    }catch(e){ return (typeHint === 'video') ? 'video' : 'image'; }
+  }
+
+  function uploadAdMedia(file, adId, typeHint){
+    try{
+      if(!file) return Promise.reject(new Error('missing_file'));
+      if(!init() || !state.storage) return Promise.reject(new Error('storage_not_ready'));
+      var kind = _guessAdType(file, typeHint);
+      var ext = _safeExtFromName(file.name, (kind === 'video' ? 'mp4' : 'jpg'));
+      var base = String(adId || ('ad_' + Date.now()));
+      var path = 'schools/' + encKey(getSchoolId()) + '/ads_media/' + base + '_' + Date.now() + '.' + ext;
+      var ref = state.storage.ref().child(path);
+      var meta = {
+        contentType: (file && file.type) ? String(file.type) : (kind === 'video' ? 'video/mp4' : 'image/jpeg'),
+        cacheControl: 'public,max-age=31536000'
+      };
+      return ref.put(file, meta).then(function(snap){
+        return snap.ref.getDownloadURL();
+      }).then(function(url){
+        return String(url||'');
+      });
+    }catch(e){
+      return Promise.reject(e);
+    }
+  }
+
+  function uploadSharedAdsFile(file, typeHint){
+    return uploadAdMedia(file, 'ad', typeHint);
+  }
+
   function pullToLocalStorage(){
     if(!init() || !state.db) return Promise.resolve(0);
     var col = state.db.collection('app_backups').doc(getSchoolId()).collection('local_storage');
