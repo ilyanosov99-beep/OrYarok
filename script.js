@@ -4583,32 +4583,12 @@ function updateEdgeHandles(){
       var hw2 = lh.getBoundingClientRect().width || 28;
       var hh2 = lh.getBoundingClientRect().height || 48;
 
-      // Closed-state profile handle (gold circle) target position: top-left with margins
-      // NOTE: this is the visible icon in the screenshot (#leftEdgeHandle), not .home-profile-btn
-      var PROFILE_HANDLE_LEFT_MARGIN = 12;
-      var PROFILE_HANDLE_TOP_MARGIN  = 92;
-
-      var x2 = PROFILE_HANDLE_LEFT_MARGIN;
-      var y2 = PROFILE_HANDLE_TOP_MARGIN;
-
-      if(sm){
-        var r2 = sm.getBoundingClientRect();
-        var open2 = document.body.classList.contains("student-menu-open") || document.body.classList.contains("student-menu-closing");
-        if(open2){
-          // When left menu is open, keep handle attached to the menu edge
-          x2 = r2.right - (hw2/2);
-          y2 = r2.top + 22;
-        }else{
-          // Closed state: fixed top-left location requested by user
-          x2 = PROFILE_HANDLE_LEFT_MARGIN;
-          y2 = PROFILE_HANDLE_TOP_MARGIN;
-        }
-      }
-
-      // y2 is already a top coordinate target
-
-if(vh){ y2 = Math.max(60, Math.min(vh - hh2 - 60, y2)); }
-      x2 = Math.max(-hw2/2, Math.min(vw - hw2/2, x2));
+      // FIXED profile handle position (top-left of screen) — single source of truth
+      // Removes menu/open-state driven relocation that kept overriding CSS changes.
+      var x2 = 12;
+      var y2 = 84;
+      if(vw){ x2 = Math.max(0, Math.min(vw - hw2, x2)); }
+      if(vh){ y2 = Math.max(0, Math.min(vh - hh2, y2)); }
 
       lh.style.left = x2 + "px";
       lh.style.top  = y2 + "px";

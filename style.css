@@ -748,7 +748,7 @@ body.menu-open::before{
 }
 .home-contact-btn{ right:8px; bottom:20px; width:103px; height:103px; }
 .home-location-btn{ right:100px; bottom:16px; width:108px; height:110px; }
-.home-profile-btn{ left:12px !important; top:56px !important; right:auto !important; bottom:auto !important; width:100px; height:100px; }
+.home-profile-btn{ right:290px; bottom:620px; width:100px; height:100px; }
 
 .home-contact-btn img{ width:100px; height:100px; display:block; pointer-events:none; }
 .home-location-btn img{ width:103px; height:103px; display:block; pointer-events:none; }
@@ -2762,8 +2762,9 @@ body.pay-open .home-profile-btn{
 
 /* LEFT (profile) - yellow top, green bottom (darker) */
 #leftEdgeHandle{
-  left: auto;
-  right: auto;
+  left: 12px !important;
+  top: 84px !important;
+  right: auto !important;
   border-left-color: rgba(255,196,0,.22);
   box-shadow:
     0 14px 34px rgba(0,0,0,.55),
@@ -3482,17 +3483,6 @@ body.pay-open #homeVignette{
 :focus-visible{
   outline: 3px solid rgba(255,215,120,.65);
   outline-offset: 3px;
-}
-
-
-/* PROFILE ICON FINAL POSITION (single source of truth) */
-.home-profile-btn{
-  position: fixed !important;
-  left: 12px !important;
-  top: 56px !important;
-  right: auto !important;
-  bottom: auto !important;
-  z-index: 9999 !important;
 }
 
 /* Respect reduced motion */
