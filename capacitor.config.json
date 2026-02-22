@@ -1,0 +1,6 @@
+{
+  "appId": "com.example.drivingschoolapp",
+  "appName": "האפליקציה שלי",
+  "webDir": ".",
+  "bundledWebRuntime": false
+}
