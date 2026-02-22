@@ -748,7 +748,7 @@ body.menu-open::before{
 }
 .home-contact-btn{ right:8px; bottom:20px; width:103px; height:103px; }
 .home-location-btn{ right:100px; bottom:16px; width:108px; height:110px; }
-.home-profile-btn{ right:auto; bottom:auto; left:14px; top:calc(env(safe-area-inset-top, 0px) + 14px); width:100px; height:100px; }
+.home-profile-btn{ top:calc(var(--safe-top, 0px) + 12px) !important; left:12px !important; right:auto !important; bottom:auto !important; width:100px; height:100px; margin:0 !important; transform:none; }
 
 .home-contact-btn img{ width:100px; height:100px; display:block; pointer-events:none; }
 .home-location-btn img{ width:103px; height:103px; display:block; pointer-events:none; }
@@ -5681,14 +5681,6 @@ body.kb-open .shopdetails-body{
 #homeBtn, #profileBtn{
   transition: opacity 180ms ease;
   will-change: opacity;
-}
-
-/* final profile icon position on home screen */
-#profileBtn.home-floating-btn.home-profile-btn{
-  right:auto !important;
-  bottom:auto !important;
-  left:14px !important;
-  top:calc(env(safe-area-inset-top, 0px) + 14px) !important;
 }
 
 
