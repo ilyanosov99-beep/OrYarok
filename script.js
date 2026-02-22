@@ -7011,7 +7011,88 @@ function suSetInvalid(id, on){
   else el.classList.remove("invalid");
 }
 
+
+function suNormTz9(v){
+  try{
+    var z = String(v||"").replace(/\D/g,"");
+    if(!z) return "";
+    if(z.length < 9) z = z.padStart(9, "0");
+    return z;
+  }catch(e){ return ""; }
+}
+
+function suTzExistsInSystem(tz){
+  try{
+    var z = suNormTz9(tz);
+    if(!z) return false;
+
+    // appUsers can be object map {tz:pass} or array of records
+    try{
+      var rawUsers = DBStorage.getItem("appUsers");
+      if(rawUsers){
+        var users = JSON.parse(rawUsers);
+        if(users && typeof users === "object"){
+          if(!Array.isArray(users)){
+            var keys = Object.keys(users);
+            for(var i=0;i<keys.length;i++){
+              if(suNormTz9(keys[i]) === z) return true;
+            }
+          }else{
+            for(var j=0;j<users.length;j++){
+              var u = users[j] || {};
+              var cand = u.tz || u.id || u.userId || u.username || u.user || u.uid || u.teudatZehut || u["תז"] || u['ת"ז'] || u['ת״ז'];
+              if(suNormTz9(cand) === z) return true;
+            }
+          }
+        }
+      }
+    }catch(_e1){}
+
+    // registry map / array
+    try{
+      var rawReg = DBStorage.getItem("students_registry_v1");
+      if(rawReg){
+        var reg = JSON.parse(rawReg);
+        if(reg && typeof reg === "object"){
+          if(!Array.isArray(reg)){
+            var rKeys = Object.keys(reg);
+            for(var k=0;k<rKeys.length;k++){
+              var rk = rKeys[k];
+              if(suNormTz9(rk) === z) return true;
+              var rv = reg[rk] || {};
+              var rc = rv.tz || rv.id || rv.teudatZehut || rv["תז"] || rv['ת"ז'] || rv['ת״ז'];
+              if(suNormTz9(rc) === z) return true;
+            }
+          }else{
+            for(var a=0;a<reg.length;a++){
+              var rr = reg[a] || {};
+              var ac = rr.tz || rr.id || rr.teudatZehut || rr["תז"] || rr['ת"ז'] || rr['ת״ז'];
+              if(suNormTz9(ac) === z) return true;
+            }
+          }
+        }
+      }
+    }catch(_e2){}
+
+    try{
+      if(DBStorage.getItem("student_profile_" + z) != null) return true;
+    }catch(_e3){}
+
+    return false;
+  }catch(e){
+    return false;
+  }
+}
+
 function suSaveUser(tz, password, profile){
+  try{
+    var __z = suNormTz9(tz);
+    if(__z && suTzExistsInSystem(__z)){
+      try{ window.__suLastError = 'duplicate_tz'; }catch(_e){}
+      return { ok:false, reason:'duplicate_tz' };
+    }
+    tz = __z || String(tz||'').trim();
+  }catch(_e0){}
   try{
     var users = loadUsers();
     users[String(tz)] = String(password);
@@ -7237,7 +7318,18 @@ function bindSignupPage(){
         email:email,
         createdAt: Date.now()
       };
-      suSaveUser(tz, pass, profile);
+      if(suTzExistsInSystem(tz)){
+        suSetInvalid("f-tz", true);
+        try{ toast("תז כבר קיים במערכת"); }catch(err){}
+        return;
+      }
+
+      var __suRes = suSaveUser(tz, pass, profile);
+      if(__suRes && __suRes.ok === false){
+        suSetInvalid("f-tz", true);
+        try{ toast("תז כבר קיים במערכת"); }catch(err){}
+        return;
+      }
 
       // success UI
       var sw = document.getElementById("su_successWrap");
@@ -17561,7 +17653,8 @@ if(document.readyState === "loading"){
    ADS BOARD (Home + Manager)
    ========================= */
 (function(){
-  var LS_KEY = "adsBoardItems_v1";
+  var LS_KEY = "adsBoardItems_v1"; // compatibility key name only (ads no longer persist to localStorage)
+  var __adsMemoryJson = "[]";
   var carouselTimer = null;
   var curIdx = 0;
   var currentVideoEl = null;
@@ -17574,12 +17667,21 @@ if(document.readyState === "loading"){
   function safeJsonParse(s, fb){
     try{ return JSON.parse(s||""); }catch(e){ return fb; }
   }
+  function _getSharedAdsJsonRaw(){
+    try{
+      if(window.FBBridge && typeof window.FBBridge.getSharedAdsJson === "function"){
+        var j = window.FBBridge.getSharedAdsJson();
+        if(typeof j === "string" && j) return j;
+      }
+    }catch(e){}
+    return __adsMemoryJson || "[]";
+  }
+
   function loadAds(){
-    var raw = null;
-    try{ raw = localStorage.getItem(LS_KEY); }catch(e){ raw = null; }
+    var raw = _getSharedAdsJsonRaw();
     var arr = safeJsonParse(raw, []);
     if(!Array.isArray(arr)) arr = [];
-    // sanitize
+    var seen = {};
     arr = arr.filter(function(it){
       return it && (it.type === "image" || it.type === "video") && (typeof it.src === "string") && it.src.length;
     }).map(function(it){
@@ -17589,23 +17691,22 @@ if(document.readyState === "loading"){
         src: it.src,
         duration: (typeof it.duration === "number" && it.duration >= 2 && it.duration <= 30) ? it.duration : 5
       };
+    }).filter(function(it){
+      var k = String(it.id||"") + "|" + String(it.src||"");
+      if(seen[k]) return false;
+      seen[k] = 1;
+      return true;
     });
     return arr;
   }
   function saveAds(arr){
     var __json = JSON.stringify(arr||[]);
-    try{ localStorage.setItem(LS_KEY, __json); }catch(e){}
-    
-try{
-  if(window.FBBridge && typeof window.FBBridge.saveSharedAdsJson === "function"){
-    // Avoid Firestore doc size limit (1MiB). If still too large (e.g., data: URLs), skip cloud push.
-    if(__json && __json.length > 750000){
-      try{ console.warn("adsBoardItems too large for cloud sync; keep local only"); }catch(e){}
-    }else{
-      window.FBBridge.saveSharedAdsJson(__json);
-    }
-  }
-}catch(e){}
+    __adsMemoryJson = __json;
+    try{
+      if(window.FBBridge && typeof window.FBBridge.saveSharedAdsJson === "function"){
+        window.FBBridge.saveSharedAdsJson(__json);
+      }
+    }catch(e){}
   }
 
   function stopCarousel(){
@@ -18213,7 +18314,7 @@ if(miniBtn){
     m.classList.remove("hidden");
     m.setAttribute("aria-hidden","false");
     $("mgrAdsHint").textContent = "";
-    if($("mgrAdsFile")) $("mgrAdsFile").value = "";
+    if($("mgrAdsFile")) { $("mgrAdsFile").value = ""; try{ $("mgrAdsFile").style.pointerEvents="auto"; }catch(e){} }
     if(!isEdit){
       editingId = null;
       $("mgrAdsModalTitle").textContent = "מודעה חדשה";
@@ -18333,7 +18434,6 @@ if(miniBtn){
 
     var fileEl = $("mgrAdsFile");
     var file = (fileEl && fileEl.files && fileEl.files[0]) ? fileEl.files[0] : null;
-
     var hint = $("mgrAdsHint");
     if(hint) hint.textContent = "";
 
@@ -18351,6 +18451,13 @@ if(miniBtn){
       }else{
         arr.push({ id: ("ad_" + Date.now()), type: type, src: src, duration: dur });
       }
+      var seen = {};
+      arr = arr.filter(function(it){
+        var k = String(it.id||"") + "|" + String(it.src||"");
+        if(seen[k]) return false;
+        seen[k] = 1;
+        return true;
+      });
       saveAds(arr);
       closeAdsModal();
       mgrAdsRenderList();
@@ -18361,70 +18468,42 @@ if(miniBtn){
       finalizeWithSrc(url);
       return;
     }
-
     if(!file){
       finalizeWithSrc(null);
       return;
     }
 
-    // size guard (base64 can be big)
-    var maxBytes = (type === "video") ? (8*1024*1024) : (3*1024*1024);
+    var maxBytes = (type === "video") ? (40*1024*1024) : (20*1024*1024);
     if(file.size > maxBytes){
       if(hint) hint.textContent = "הקובץ גדול מדי. נסה קובץ קטן יותר.";
       return;
     }
 
-    if(window.FBBridge && typeof window.FBBridge.uploadSharedAdsFile === "function"){
-      if(hint) hint.textContent = "מעלה קובץ...";
-      try{
-        window.FBBridge.uploadSharedAdsFile(file, type).then(function(downloadUrl){
-          if(hint) hint.textContent = "";
-          finalizeWithSrc(downloadUrl || null);
-        }).catch(function(){
-          if(hint) hint.textContent = "שגיאה בהעלאה לענן.";
-        });
-      }catch(e){
+    if(!(window.FBBridge && typeof window.FBBridge.uploadAdMedia === "function")){
+      if(hint) hint.textContent = "העלאה לענן לא זמינה.";
+      return;
+    }
+
+    try{
+      if(hint) hint.textContent = "מעלה קובץ... 0%";
+      var __adId = editingId ? editingId : ("ad_" + Date.now());
+      window.FBBridge.uploadAdMedia(file, __adId, type, function(p){
+        try{
+          if(!hint || !p || !p.totalBytes) return;
+          var pct = Math.max(0, Math.min(100, Math.round((p.bytesTransferred||0) * 100 / p.totalBytes)));
+          hint.textContent = "מעלה קובץ... " + pct + "%";
+        }catch(e){}
+      }).then(function(downloadUrl){
+        if(hint) hint.textContent = "";
+        finalizeWithSrc(downloadUrl || null);
+      }).catch(function(e){
+        try{ console.error(e); }catch(_e){}
         if(hint) hint.textContent = "שגיאה בהעלאה לענן.";
-      }
-      return;
-    }
-
-    
-// Prefer Firebase Storage upload to avoid Firestore 1MB doc limit (base64 data URLs are huge)
-if(window.FBBridge && typeof window.FBBridge.uploadAdMedia === "function"){
-  try{
-    if(hint) hint.textContent = "מעלה לענן...";
-  }catch(e){}
-  var __adId = editingId ? editingId : ("ad_" + Date.now());
-  window.FBBridge.uploadAdMedia(file, __adId).then(function(downloadUrl){
-    if(!downloadUrl){
+      });
+    }catch(e){
       if(hint) hint.textContent = "שגיאה בהעלאה לענן.";
-      return;
     }
-    finalizeWithSrc(String(downloadUrl));
-  }).catch(function(e){
-    // Fallback to local base64 (works locally but may not sync across devices if too large)
-    try{ if(hint) hint.textContent = "לא הצלחתי להעלות לענן, נשמר מקומית."; }catch(_e){}
-    fileToDataUrl(file, function(err, dataUrl){
-      if(err || !dataUrl){
-        if(hint) hint.textContent = "שגיאה בקריאת הקובץ.";
-        return;
-      }
-      finalizeWithSrc(dataUrl);
-    });
-  });
-  return;
-}
-
-// Fallback (no Firebase Storage): store as base64 in localStorage (may not sync across devices)
-fileToDataUrl(file, function(err, dataUrl){
-  if(err || !dataUrl){
-    if(hint) hint.textContent = "שגיאה בקריאת הקובץ.";
-    return;
   }
-  finalizeWithSrc(dataUrl);
-});
-}
 
   function mgrAdsDeleteFromModal(){
     if(!editingId) return;
@@ -18443,11 +18522,50 @@ fileToDataUrl(file, function(err, dataUrl){
     var saveBtn = $("mgrAdsSaveBtn");
     var delBtn = $("mgrAdsDeleteBtn");
 
-    if(addBtn) addBtn.addEventListener("click", function(){ openAdsModal(false); });
-    if(closeBtn) closeBtn.addEventListener("click", closeAdsModal);
+    function bindTap(btn, fn){
+      if(!btn || !fn || btn.__adsTapBound) return;
+      btn.__adsTapBound = true;
+      var lockTs = 0, touchFiredTs = 0;
+      function fire(ev, fromTouch){
+        try{ if(ev){ ev.preventDefault(); ev.stopPropagation(); } }catch(e){}
+        var now = Date.now();
+        if(fromTouch) touchFiredTs = now;
+        if(!fromTouch && (now - touchFiredTs) < 600) return;
+        if(now - lockTs < 300) return;
+        lockTs = now;
+        fn();
+      }
+      btn.addEventListener("touchend", function(ev){ fire(ev, true); }, {passive:false});
+      btn.addEventListener("click", function(ev){ fire(ev, false); });
+    }
+
+    var fileBtn = $("mgrAdsFile");
+    if(fileBtn && !fileBtn.__adsFileFixBound){
+      fileBtn.__adsFileFixBound = true;
+      fileBtn.addEventListener("change", function(){
+        try{ if(document.activeElement) document.activeElement.blur(); }catch(e){}
+        try{
+          if(fileBtn.files && fileBtn.files[0]){
+            if($("mgrAdsHint")) $("mgrAdsHint").textContent = "קובץ נבחר: " + (fileBtn.files[0].name || "");
+            // Android native file input can keep an invisible hitbox above the save button after picker closes
+            fileBtn.style.pointerEvents = "none";
+          }
+        }catch(e){}
+      });
+    }
+
+    bindTap(addBtn, function(){ openAdsModal(false); });
+    bindTap(closeBtn, closeAdsModal);
     if(backdrop) backdrop.addEventListener("click", closeAdsModal);
-    if(saveBtn) saveBtn.addEventListener("click", mgrAdsSave);
-    if(delBtn) delBtn.addEventListener("click", mgrAdsDeleteFromModal);
+    bindTap(saveBtn, mgrAdsSave);
+    if(saveBtn){
+      saveBtn.type = "button";
+      saveBtn.onclick = function(ev){
+        try{ ev.preventDefault(); ev.stopPropagation(); }catch(e){}
+        mgrAdsSave();
+      };
+    }
+    bindTap(delBtn, mgrAdsDeleteFromModal);
   }
 
   // expose for existing manager overlay code

@@ -6213,10 +6213,13 @@ body.theme-day .ads-board{
 }
 
 /* Ads modal */
-.mgr-ads-modal{ position:fixed; inset:0; z-index:40000; }
+.mgr-ads-modal{ position:fixed; inset:0; z-index:900000 !important; }
 .mgr-ads-modal.hidden{ display:none; }
 .mgr-ads-backdrop{ position:absolute; inset:0; background:rgba(0,0,0,0.55); }
 .mgr-ads-panel{
+  position: relative;
+  z-index: 900002;
+
   position:absolute;
   left:51%;
   top:50%;
@@ -6250,6 +6253,10 @@ body.theme-day .ads-board{
 .mgr-ads-or{ text-align:center; opacity:0.6; font-size:12px; margin:2px 0; }
 .mgr-ads-actions{ display:flex; gap:10px; margin-top:6px; }
 .mgr-ads-hint{ font-size:12px; opacity:0.75; margin-top:4px; min-height:16px; }
+/* Android file picker sometimes leaves native file input hitbox over modal actions */
+.mgr-file{ display:block; box-sizing:border-box; position:relative; z-index:1; }
+.mgr-ads-actions{ position:relative; z-index:5; }
+.mgr-home-btn{ position:relative; }
 
 
 /* Bottom actions (START + SHOP) */
@@ -6690,3 +6697,9 @@ body.theme-day .leave-msg-hint{
   background: rgba(0,0,0,.06);
   border-color: rgba(0,0,0,.10);
 }
+
+/* v12 ads modal save button mobile hitbox fix */
+#mrgDummy{}
+#mgrAdsFile{ position:relative; z-index:1; }
+#mgrAdsSaveBtn, #mgrAdsDeleteBtn{ position:relative; z-index:20; touch-action:manipulation; }
+.mgr-ads-actions{ position:relative; z-index:900003 !important; pointer-events:auto; }
