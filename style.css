@@ -748,7 +748,7 @@ body.menu-open::before{
 }
 .home-contact-btn{ right:8px; bottom:20px; width:103px; height:103px; }
 .home-location-btn{ right:100px; bottom:16px; width:108px; height:110px; }
-.home-profile-btn{ top:calc(var(--safe-top, 0px) + 12px) !important; left:12px !important; right:auto !important; bottom:auto !important; width:100px; height:100px; margin:0 !important; transform:none; }
+.home-profile-btn{ left:8px; top:8px; right:auto; bottom:auto; width:100px; height:100px; margin:0; transform:none; }
 
 .home-contact-btn img{ width:100px; height:100px; display:block; pointer-events:none; }
 .home-location-btn img{ width:103px; height:103px; display:block; pointer-events:none; }
