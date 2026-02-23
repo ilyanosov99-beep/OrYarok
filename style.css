@@ -735,6 +735,7 @@ body.menu-open::before{
 .home-contact-btn,
 .home-shop-btn,
 .home-location-btn,
+.home-profile-btn{
   position:fixed;
   z-index:9999;
   pointer-events:auto;
@@ -747,9 +748,11 @@ body.menu-open::before{
 }
 .home-contact-btn{ right:8px; bottom:20px; width:103px; height:103px; }
 .home-location-btn{ right:100px; bottom:16px; width:108px; height:110px; }
+.home-profile-btn{ left:16px; top:16px; right:auto; bottom:auto; width:100px; height:100px; }
 
 .home-contact-btn img{ width:100px; height:100px; display:block; pointer-events:none; }
 .home-location-btn img{ width:103px; height:103px; display:block; pointer-events:none; }
+.home-profile-btn img{ width:100px; height:100px; display:block; object-fit:contain; pointer-events:none; }
 
 /* Secretary: Mail floating button (locked to home page, does not jump with keyboard) */
 .sec-mail-btn{
@@ -797,12 +800,14 @@ body.theme-day .sec-inbox-item{ background:rgba(0,0,0,.03); border-color:rgba(0,
 .home-contact-btn,
 .home-shop-btn,
 .home-location-btn,
+.home-profile-btn{
   transition: opacity .32s ease;
   will-change: opacity;
 }
 body.popup-open .home-contact-btn,
 body.popup-open .home-shop-btn,
 body.popup-open .home-location-btn,
+body.popup-open .home-profile-btn{
   opacity:0;
   pointer-events:none;
 }
@@ -1669,9 +1674,11 @@ body.student-menu-open .student-menu{ transform:translateX(0); }
 }
 
 /* When any side menu is open, lock high-z home buttons */
+body.menu-open .home-profile-btn,
 body.menu-open .home-location-btn{
   pointer-events: none !important;
 }
+body.student-menu-open .home-profile-btn,
 body.student-menu-open .home-location-btn{
   pointer-events: none !important;
 }
@@ -1841,6 +1848,7 @@ body.pay-open .top-home-btn,
 body.pay-open .home-contact-btn,
 body.pay-open .home-shop-btn,
 body.pay-open .home-location-btn,
+body.pay-open .home-profile-btn{
   display:none !important;
 }
 .pay-modal{
@@ -2848,6 +2856,7 @@ body.admin-open .top-home-btn,
 body.admin-open .home-contact-btn,
 body.admin-open .home-shop-btn,
 body.admin-open .home-location-btn,
+body.admin-open .home-profile-btn{
   display:none !important;
 }
 
@@ -3455,6 +3464,7 @@ body.pay-open #homeVignette{
 .home-contact-btn,
 .home-shop-btn,
 .home-location-btn,
+.home-profile-btn,
 .top-home-btn{
   filter: drop-shadow(0 14px 28px rgba(0,0,0,.42));
   transition: transform .14s ease, filter .14s ease;
@@ -3463,6 +3473,7 @@ body.pay-open #homeVignette{
 .home-contact-btn:active,
 .home-shop-btn:active,
 .home-location-btn:active,
+.home-profile-btn:active,
 .top-home-btn:active{
   transform: translateY(1px) scale(.985);
   filter: drop-shadow(0 10px 20px rgba(0,0,0,.38));
@@ -4936,6 +4947,7 @@ body.manager-open .top-home-btn,
 body.manager-open .home-contact-btn,
 body.manager-open .home-shop-btn,
 body.manager-open .home-location-btn,
+body.manager-open .home-profile-btn{
   display:none !important;
 }
 
@@ -5666,6 +5678,7 @@ body.kb-open .shopdetails-body{
 
 
 /* v15->v16: smooth fade between profile and back (home) icons */
+#homeBtn, #profileBtn{
   transition: opacity 180ms ease;
   will-change: opacity;
 }
@@ -6620,6 +6633,7 @@ body.secretary-mode #menuMainSection{ display:none !important; }
 body.secretary-mode #adsBoard,
 body.secretary-mode #shopBtn,
 body.secretary-mode #startButton{ display:none !important; }
+body.secretary-mode #profileBtn{ display:none !important; }
 
 
 /* ===== Secretary: student search under logo ===== */
@@ -6689,3 +6703,20 @@ body.theme-day .leave-msg-hint{
 #mgrAdsFile{ position:relative; z-index:1; }
 #mgrAdsSaveBtn, #mgrAdsDeleteBtn{ position:relative; z-index:20; touch-action:manipulation; }
 .mgr-ads-actions{ position:relative; z-index:900003 !important; pointer-events:auto; }
+
+
+/* FORCE: home/profile icon buttons final positions */
+.home-profile-btn{
+  left:16px !important;
+  top:16px !important;
+  right:auto !important;
+  bottom:auto !important;
+  transform:none !important;
+}
+#homeBtn.top-home-btn, .top-home-btn{
+  right:16px !important;
+  top:16px !important;
+  left:auto !important;
+  bottom:auto !important;
+  transform:none !important;
+}
