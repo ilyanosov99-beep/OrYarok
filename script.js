@@ -18783,6 +18783,7 @@ window.enableSecretaryMode = function(persist){
     try{ if(typeof syncAppStateFromDOM === 'function') syncAppStateFromDOM(); }catch(e){}
     try{ if(typeof updateEdgeHandles === 'function') updateEdgeHandles(); }catch(e){}
     try{ if(typeof updateEdgeHandlePositions === 'function') updateEdgeHandlePositions(); }catch(e){}
+    try{ window.__secEnsureTopBackBtn && window.__secEnsureTopBackBtn(); }catch(e){}
   };
 
   window.disableSecretaryMode = function(){
@@ -18797,6 +18798,7 @@ window.enableSecretaryMode = function(persist){
     try{ if(typeof syncAppStateFromDOM === 'function') syncAppStateFromDOM(); }catch(e){}
     try{ if(typeof updateEdgeHandles === 'function') updateEdgeHandles(); }catch(e){}
     try{ if(typeof updateEdgeHandlePositions === 'function') updateEdgeHandlePositions(); }catch(e){}
+    try{ window.__secEnsureTopBackBtn && window.__secEnsureTopBackBtn(); }catch(e){}
   };
 
   window.secretaryLogout = function(){
@@ -18808,6 +18810,80 @@ window.enableSecretaryMode = function(persist){
   window.openSecretaryTestOrders = function(){
     try{
       if(!_secIsOn()) return;
+
+      function escHtml(v){
+        try{ return String(v==null?'':v).replace(/[&<>\"']/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]); }); }catch(e){ return ''; }
+      }
+      function pad2(n){ n = Number(n)||0; return String(n).padStart(2,'0'); }
+      function parseTestDateTime(rawDate, rawTime){
+        try{
+          var d = String(rawDate||'').trim();
+          if(!d) return null;
+          d = d.replace(/\./g,'/').replace(/-/g,'/');
+          var m = d.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+          var y,mo,da;
+          if(m){ da=+m[1]; mo=+m[2]; y=+m[3]; }
+          else {
+            m = d.match(/^(\d{4})\/(\d{1,2})\/(\d{1,2})$/);
+            if(!m) return null;
+            y=+m[1]; mo=+m[2]; da=+m[3];
+          }
+          var hh=9, mm=0;
+          var t = String(rawTime||'').trim();
+          var mt = t.match(/(\d{1,2})\s*[:.]\s*(\d{2})/);
+          if(mt){ hh=Math.min(23, +mt[1]||0); mm=Math.min(59, +mt[2]||0); }
+          var dt = new Date(y, mo-1, da, hh, mm, 0, 0);
+          if(isNaN(dt.getTime())) return null;
+          return dt;
+        }catch(e){ return null; }
+      }
+      function _readAny(o, keys){
+        try{
+          if(!o || typeof o!=='object') return null;
+          for(var i=0;i<keys.length;i++){
+            var k=keys[i];
+            if(Object.prototype.hasOwnProperty.call(o,k) && o[k] != null && String(o[k]).trim()!=='') return o[k];
+          }
+        }catch(e){}
+        return null;
+      }
+      function collectFutureTests(){
+        var out = [];
+        try{
+          var arr = (typeof _secGetAllStudents === 'function') ? (_secGetAllStudents()||[]) : [];
+          if(!Array.isArray(arr)) arr = [];
+          for(var i=0;i<arr.length;i++){
+            var st = arr[i] || {};
+            var testDate = _readAny(st, ['testDate','nextTestDate','תאריך טסט','תאריך_טסט','test_date']);
+            var testTime = _readAny(st, ['testTime','testHour','שעת טסט','שעה_טסט','test_time']);
+            var dt = parseTestDateTime(testDate, testTime);
+            if(!dt) continue;
+            var name = '';
+            try{ name = (typeof _secStudentName==='function') ? _secStudentName(st) : ''; }catch(e){}
+            var tz = '';
+            try{ tz = (typeof _secGetStudentTz==='function') ? _secGetStudentTz(st) : ''; }catch(e){}
+            out.push({
+              name: name || String(_readAny(st,['name','fullName'])||'ללא שם'),
+              tz: tz || String(_readAny(st,['tz','id','username'])||''),
+              dt: dt,
+              time: pad2(dt.getHours()) + ':' + pad2(dt.getMinutes())
+            });
+          }
+        }catch(e){}
+        out.sort(function(a,b){ return a.dt - b.dt; });
+        return out;
+      }
+      function groupByDateRows(rows){
+        var g = Object.create(null);
+        for(var i=0;i<rows.length;i++){
+          var r = rows[i];
+          var dk = r.dt.getFullYear() + '-' + pad2(r.dt.getMonth()+1) + '-' + pad2(r.dt.getDate());
+          (g[dk]||(g[dk]=[])).push(r);
+        }
+        Object.keys(g).forEach(function(k){ g[k].sort(function(a,b){ return a.dt - b.dt; }); });
+        return g;
+      }
+
       let ov = document.getElementById('secTestOrdersOverlay');
       if(!ov){
         ov = document.createElement('div');
@@ -18815,7 +18891,7 @@ window.enableSecretaryMode = function(persist){
         ov.className = 'overlay';
         ov.style.zIndex = '2400';
         ov.innerHTML = [
-          '<div class="pay-modal" style="width:min(980px,96vw);max-width:96vw;max-height:90vh;overflow:auto;position:relative;">',
+          '<div class="pay-modal" id="secTestsRootModal" style="width:min(980px,96vw);max-width:96vw;max-height:90vh;overflow:auto;position:relative;">',
             '<button type="button" class="pay-close-x" id="secTestOrdersCloseX" aria-label="סגור">×</button>',
             '<div id="secTestOrdersHost" dir="rtl"></div>',
           '</div>'
@@ -18823,6 +18899,14 @@ window.enableSecretaryMode = function(persist){
         document.body.appendChild(ov);
         const closeBtn = document.getElementById('secTestOrdersCloseX');
         if(closeBtn) closeBtn.onclick = function(){ try{ closeOverlay('secTestOrdersOverlay'); }catch(e){} };
+        ov.addEventListener('click', function(ev){
+          try{
+            var modal = document.getElementById('secTestsRootModal');
+            if(modal && ev && ev.target && !modal.contains(ev.target)){
+              closeOverlay('secTestOrdersOverlay');
+            }
+          }catch(e){}
+        });
       }
 
       const host = document.getElementById('secTestOrdersHost');
@@ -18834,7 +18918,7 @@ window.enableSecretaryMode = function(persist){
               '<button id="secTestsFutureBtn" type="button" style="flex:1;min-height:44px;border-radius:14px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.03);color:#fff;font-weight:800;">טסטים עתידיים</button>',
             '</div>',
             '<div id="secTestsCurrentPanel"></div>',
-            '<div id="secTestsFuturePanel" style="display:none;color:#d9d9d9;font-size:16px;padding:10px 4px;">כפתור ריק (בהמשך נוסיף עמוד טסטים עתידיים).</div>',
+            '<div id="secTestsFuturePanel" style="display:none;"></div>',
           '</div>'
         ].join('');
       }
@@ -18894,19 +18978,125 @@ window.enableSecretaryMode = function(persist){
         panel.innerHTML = html;
       }
 
+      function secOpenFutureDayModal(dateKey, rows){
+        var old = document.getElementById('secFutureDayModal');
+        if(old) old.remove();
+        var title = (typeof _dateTitle === 'function') ? _dateTitle(dateKey) : dateKey;
+        var html = '<div id="secFutureDayModal" style="position:fixed;inset:0;z-index:2450;background:rgba(0,0,0,.35);display:grid;place-items:center;padding:14px;" dir="rtl">';
+        html += '<div id="secFutureDayModalBox" style="width:min(760px,95vw);max-height:82vh;overflow:auto;background:#08110f;border:1px solid rgba(255,255,255,.12);border-radius:18px;box-shadow:0 12px 40px rgba(0,0,0,.35);padding:12px;position:relative;color:#fff;">';
+        html += '<button type="button" id="secFutureDayCloseX" class="pay-close-x" aria-label="סגור">×</button>';
+        html += '<div style="font-weight:900;font-size:18px;margin:2px 0 12px;">טסטים ליום ' + escHtml(title) + '</div>';
+        if(!rows || !rows.length){
+          html += '<div style="color:#d9d9d9;">אין טסטים ליום זה</div>';
+        }else{
+          html += '<div style="border:1px solid rgba(255,255,255,.1);border-radius:12px;overflow:hidden;">';
+          html += '<table style="width:100%;border-collapse:collapse;font-size:14px;">';
+          html += '<thead><tr style="background:rgba(255,255,255,.05);"><th style="padding:10px;border-bottom:1px solid rgba(255,255,255,.08);text-align:right;">שעה</th><th style="padding:10px;border-bottom:1px solid rgba(255,255,255,.08);text-align:right;">תלמיד</th><th style="padding:10px;border-bottom:1px solid rgba(255,255,255,.08);text-align:right;">תז</th></tr></thead><tbody>';
+          for(var i=0;i<rows.length;i++){
+            var r = rows[i]||{};
+            html += '<tr>';
+            html += '<td style="padding:9px 10px;border-bottom:1px solid rgba(255,255,255,.06);white-space:nowrap;">'+escHtml(r.time||'—')+'</td>';
+            html += '<td style="padding:9px 10px;border-bottom:1px solid rgba(255,255,255,.06);">'+escHtml(r.name||'ללא שם')+'</td>';
+            html += '<td style="padding:9px 10px;border-bottom:1px solid rgba(255,255,255,.06);">'+escHtml(r.tz||'—')+'</td>';
+            html += '</tr>';
+          }
+          html += '</tbody></table></div>';
+        }
+        html += '</div></div>';
+        document.body.insertAdjacentHTML('beforeend', html);
+        var m = document.getElementById('secFutureDayModal');
+        var box = document.getElementById('secFutureDayModalBox');
+        var cx = document.getElementById('secFutureDayCloseX');
+        if(cx) cx.onclick = function(){ try{ m && m.remove(); }catch(e){} };
+        if(m){ m.addEventListener('click', function(ev){ try{ if(box && ev && ev.target && !box.contains(ev.target)) m.remove(); }catch(e){} }); }
+      }
+
+      function secRenderFutureCalendar(){
+        var panel = document.getElementById('secTestsFuturePanel');
+        if(!panel) return;
+        var tests = collectFutureTests();
+        var grouped = groupByDateRows(tests);
+        var now = new Date();
+        var year = now.getFullYear();
+        var monthNames = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
+        var wd = ['א׳','ב׳','ג׳','ד׳','ה׳','ו׳','ש׳'];
+        var html = '<div style="color:#d9d9d9;font-size:15px;margin:4px 2px 10px;">לוח שנה שנתי. לחיצה על יום פותחת טבלת טסטים של אותו היום.</div>';
+        html += '<div style="color:#fff;font-weight:900;font-size:18px;margin:0 2px 10px;">טסטים עתידיים - '+ year +'</div>';
+        html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px;">';
+        for(var mon=0; mon<12; mon++){
+          var first = new Date(year, mon, 1);
+          var daysInMonth = new Date(year, mon+1, 0).getDate();
+          var firstDow = first.getDay();
+          html += '<div style="border:1px solid rgba(255,255,255,.1);border-radius:14px;background:rgba(255,255,255,.03);padding:8px;">';
+          html += '<div style="font-weight:800;color:#fff;margin:2px 0 8px;text-align:center;">'+monthNames[mon]+'</div>';
+          html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;">';
+          for(var w=0; w<7; w++) html += '<div style="text-align:center;font-size:12px;color:#b8c7bf;padding:4px 0;">'+wd[w]+'</div>';
+          for(var e=0; e<firstDow; e++) html += '<div></div>';
+          for(var day=1; day<=daysInMonth; day++){
+            var dk = year + '-' + pad2(mon+1) + '-' + pad2(day);
+            var rows = grouped[dk] || [];
+            var has = rows.length > 0;
+            html += '<button type="button" class="sec-future-day" data-date="'+dk+'" style="min-height:42px;border-radius:10px;border:1px solid '+(has?'rgba(80,255,160,.35)':'rgba(255,255,255,.08)')+';background:'+(has?'rgba(25,110,65,.28)':'rgba(0,0,0,.12)')+';color:#fff;position:relative;font-weight:700;">'+day;
+            if(has) html += '<span style="position:absolute;left:4px;top:3px;font-size:10px;color:#b9ffd7;">'+rows.length+'</span>';
+            html += '</button>';
+          }
+          html += '</div></div>';
+        }
+        html += '</div>';
+        panel.innerHTML = html;
+
+        panel.querySelectorAll('.sec-future-day').forEach(function(btn){
+          btn.addEventListener('click', function(){
+            try{
+              var dk = btn.getAttribute('data-date') || '';
+              secOpenFutureDayModal(dk, grouped[dk] || []);
+            }catch(e){}
+          });
+        });
+      }
+
       const cBtn = document.getElementById('secTestsCurrentBtn');
       const fBtn = document.getElementById('secTestsFutureBtn');
-      if(cBtn) cBtn.onclick = function(){ secSetTestsTab('current'); };
-      if(fBtn) fBtn.onclick = function(){ secSetTestsTab('future'); };
+      if(cBtn) cBtn.onclick = function(){ secSetTestsTab('current'); secRenderOrdersList(); };
+      if(fBtn) fBtn.onclick = function(){ secSetTestsTab('future'); secRenderFutureCalendar(); };
       secSetTestsTab('current');
       secRenderOrdersList();
+      secRenderFutureCalendar();
 
       try{ openOverlay('secTestOrdersOverlay'); }catch(e){ if(ov){ ov.classList.add('show'); ov.style.display='grid'; } }
+      try{ window.__secEnsureTopBackBtn && window.__secEnsureTopBackBtn(); }catch(e){}
     }catch(err){
       console.warn('openSecretaryTestOrders failed', err);
     }
   };
 
+  // Secretary top-right back button (profile/home)
+    // Secretary top-right app home button (reuse same visual icon style)
+  window.__secEnsureTopBackBtn = function(){
+    try{
+      var btn = document.getElementById('secTopHomeBtn');
+      if(!btn){
+        btn = document.createElement('button');
+        btn.id = 'secTopHomeBtn';
+        btn.type = 'button';
+        btn.setAttribute('aria-label','חזרה');
+        btn.className = 'top-home-btn tap';
+        btn.setAttribute('data-tap','');
+        btn.style.cssText = 'position:fixed;top:10px;right:10px;left:auto;z-index:2600;display:none;';
+        btn.innerHTML = '<img alt="חזרה" src="home_icon.png">';
+        btn.onclick = function(){
+          try{ var dm = document.getElementById('secFutureDayModal'); if(dm){ dm.remove(); return; } }catch(e){}
+          try{ var sdet = document.getElementById('secShopDetailModal'); if(sdet){ sdet.remove(); return; } }catch(e){}
+          try{ if(typeof closeOverlay === 'function') closeOverlay('secShopOverlay'); }catch(e){}
+          try{ if(typeof closeOverlay === 'function') closeOverlay('secTestOrdersOverlay'); }catch(e){}
+        };
+        document.body.appendChild(btn);
+      }
+      var show = false;
+      try{ show = _secIsOn(); }catch(e){}
+      if(btn) btn.style.display = show ? 'inline-flex' : 'none';
+    }catch(e){}
+  };
   // Secretary Mail UI
   function _secIsOn(){
     try{ return document.body.classList.contains('secretary-mode') || (window.APP_STATE && window.APP_STATE.get && window.APP_STATE.get('userRole') === 'secretary'); }catch(e){ return document.body.classList.contains('secretary-mode'); }
@@ -19370,6 +19560,101 @@ function _secGetAllStudents(){
     }
     alert(sent ? ('נשלח ל-' + sent + ' תלמידים') : 'לא נשלח');
     try{ closeOverlay('secComposeOverlay'); }catch(e){}
+  };
+
+
+  // Secretary Shop UI (pickup / orders / waiting)
+  window.openSecretaryShop = function(){
+    if(!_secIsOn()) return;
+    function escH(v){ try{ return String(v==null?'':v).replace(/[&<>\"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]);}); }catch(e){ return ''; } }
+    function readOrders(){ try{ return (typeof shopReadOrders === 'function') ? (shopReadOrders()||[]) : []; }catch(e){ return []; } }
+    function waitKey(){ return 'sec_shop_waiting_v1'; }
+    function readWaitingIds(){ try{ var a=JSON.parse(localStorage.getItem(waitKey())||'[]'); return Array.isArray(a)?a:[]; }catch(e){ return []; } }
+    function writeWaitingIds(arr){ try{ localStorage.setItem(waitKey(), JSON.stringify(Array.isArray(arr)?arr:[])); }catch(e){} }
+    function addWaitingId(id){ id=String(id||'').trim(); if(!id) return; var arr=readWaitingIds(); if(arr.indexOf(id)===-1) arr.unshift(id); writeWaitingIds(arr); }
+    function fmtDt(ts){ try{ return (typeof mgrFormatDt==='function')?mgrFormatDt(ts):String(ts||''); }catch(e){ return '—'; } }
+    function orderStudentLabel(o){ var u=String((o&&o.username)||'').trim(); return u||'אורח'; }
+    function getOrderBuckets(){
+      var orders=readOrders().slice(), wait=Object.create(null), ids=readWaitingIds(), i, o, oid;
+      for(i=0;i<ids.length;i++) wait[String(ids[i])] = true;
+      var pickup=[], preorder=[], waiting=[];
+      for(i=0;i<orders.length;i++){ o=orders[i]||{}; oid=String(o.id||'').trim(); if(!oid) continue;
+        if(wait[oid]) waiting.push(o); else if(o.hasOrderOnly || String(o.status||'')==='wait_stock') preorder.push(o); else pickup.push(o); }
+      pickup.sort(function(a,b){return Number(b.createdAt||0)-Number(a.createdAt||0)}); preorder.sort(function(a,b){return Number(b.createdAt||0)-Number(a.createdAt||0)}); waiting.sort(function(a,b){return Number(b.createdAt||0)-Number(a.createdAt||0)});
+      return {pickup:pickup, preorder:preorder, waiting:waiting};
+    }
+    function rowHtml(o, act){
+      var c=Array.isArray(o.items)?o.items.length:0;
+      return '<button type="button" class="lesson-file" data-sec-shop-open="'+escH(String(o.id||''))+'" data-sec-shop-act="'+escH(act)+'" style="width:100%;text-align:right;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:10px 12px;margin:0 0 8px;color:#fff;">'
+      + '<div class="meta"><div class="title">'+escH(orderStudentLabel(o))+' • '+escH(String(o.id||''))+'</div><div class="sub">'+escH(fmtDt(o.createdAt))+' • '+escH(String(c))+' פריטים • '+escH(String(Math.round(Number(o.total||0)||0)))+'₪</div></div></button>';
+    }
+    function renderList(which){
+      var host=document.getElementById('secShopListPanel'); if(!host) return;
+      var b=getOrderBuckets(); var arr=(which==='pickup')?b.pickup:((which==='waiting')?b.waiting:b.preorder);
+      var ttl=(which==='pickup')?'איסוף':((which==='waiting')?'ממתינים':'הזמנות');
+      var note=(which==='pickup')?'עסקאות מהמלאי שמוכנות לטיפול/איסוף.':((which==='waiting')?'הוזמן מהספק וממתין להגעה.':'עסקאות עם פריטים בקטגוריה להזמנה בלבד.');
+      var html='<div style="color:#d9d9d9;font-size:14px;margin:2px 0 10px;">'+escH(note)+'</div><div style="font-weight:900;font-size:18px;margin:0 0 10px;color:#fff;">'+escH(ttl)+'</div>';
+      if(!arr.length) html += '<div class="pm-empty">אין פריטים להצגה</div>'; else for(var i=0;i<arr.length;i++) html += rowHtml(arr[i], which);
+      host.innerHTML = html;
+      host.querySelectorAll('[data-sec-shop-open]').forEach(function(btn){ btn.addEventListener('click', function(){ openSecShopOrderDetail(btn.getAttribute('data-sec-shop-open')||'', btn.getAttribute('data-sec-shop-act')||'orders'); }); });
+    }
+    function detailItemsTable(o){
+      var items=Array.isArray(o.items)?o.items:[]; if(!items.length) return '<div style="color:#d9d9d9;">אין פריטי עסקה</div>';
+      var h='<div style="border:1px solid rgba(255,255,255,.1);border-radius:12px;overflow:hidden;margin-top:8px;"><table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="background:rgba(255,255,255,.05);"><th style="padding:8px;text-align:right;">מוצר</th><th style="padding:8px;text-align:right;">כמות</th><th style="padding:8px;text-align:right;">קטגוריה</th><th style="padding:8px;text-align:right;">זמינות</th></tr></thead><tbody>';
+      for(var i=0;i<items.length;i++){ var it=items[i]||{}; h += '<tr><td style="padding:8px;border-top:1px solid rgba(255,255,255,.06);">'+escH(String(it.name||it.title||'—'))+'</td><td style="padding:8px;border-top:1px solid rgba(255,255,255,.06);">'+escH(String(it.qty||it.quantity||1))+'</td><td style="padding:8px;border-top:1px solid rgba(255,255,255,.06);">'+escH(String(it.category||'—'))+'</td><td style="padding:8px;border-top:1px solid rgba(255,255,255,.06);">'+escH(String(it.availability||'—'))+'</td></tr>'; }
+      return h + '</tbody></table></div>';
+    }
+    function findOrderById(orderId){ var arr=readOrders(); for(var i=0;i<arr.length;i++) if(String((arr[i]||{}).id||'')===String(orderId||'')) return arr[i]; return null; }
+    window.openSecShopOrderDetail = function(orderId, mode){
+      var o=findOrderById(orderId); if(!o){ try{ alert('עסקה לא נמצאה'); }catch(e){} return; }
+      var old=document.getElementById('secShopDetailModal'); if(old) old.remove();
+      var title=(mode==='pickup')?'איסוף':((mode==='waiting')?'ממתינים':'הזמנה');
+      var html='<div id="secShopDetailModal" style="position:fixed;inset:0;z-index:2460;background:rgba(0,0,0,.35);display:grid;place-items:center;padding:14px;" dir="rtl"><div id="secShopDetailBox" style="width:min(760px,95vw);max-height:86vh;overflow:auto;background:#08110f;border:1px solid rgba(255,255,255,.12);border-radius:18px;box-shadow:0 12px 40px rgba(0,0,0,.35);padding:12px;position:relative;color:#fff;"><button type="button" class="pay-close-x" id="secShopDetailCloseX" aria-label="סגור">×</button>';
+      html += '<div style="font-weight:900;font-size:18px;margin:2px 0 10px;">'+escH(title)+' • '+escH(String(o.id||''))+'</div>';
+      html += '<div style="display:grid;grid-template-columns:1fr;gap:6px;font-size:14px;color:#d9d9d9;"><div><b style="color:#fff;">תלמיד:</b> '+escH(orderStudentLabel(o))+'</div><div><b style="color:#fff;">סה״כ:</b> '+escH(String(Math.round(Number(o.total||0)||0)))+'₪</div><div><b style="color:#fff;">תאריך:</b> '+escH(fmtDt(o.createdAt))+'</div><div><b style="color:#fff;">סטטוס:</b> '+escH((typeof mgrOrderStatusLabel==='function')?mgrOrderStatusLabel(o.status):String(o.status||'—'))+'</div></div>';
+      html += detailItemsTable(o);
+      html += '<div style="display:flex;gap:8px;justify-content:flex-start;flex-wrap:wrap;margin-top:12px;"><button type="button" id="secShopDetailBtnClose" class="mgr-topbtn ghost" style="min-height:40px;">סגור</button>';
+      if(mode==='pickup') html += '<button type="button" id="secShopDetailBtnDone" class="mgr-home-btn" style="min-height:40px;">נאסף</button>';
+      if(mode==='orders') html += '<button type="button" id="secShopDetailBtnOrdered" class="mgr-home-btn" style="min-height:40px;">הוזמן</button>';
+      html += '</div></div></div>';
+      document.body.insertAdjacentHTML('beforeend', html);
+      var m=document.getElementById('secShopDetailModal'), box=document.getElementById('secShopDetailBox');
+      function closeM(){ try{ m&&m.remove(); }catch(e){} }
+      var cx=document.getElementById('secShopDetailCloseX'), cb=document.getElementById('secShopDetailBtnClose');
+      if(cx) cx.onclick=closeM; if(cb) cb.onclick=closeM;
+      if(m) m.addEventListener('click', function(ev){ try{ if(box && ev && ev.target && !box.contains(ev.target)) closeM(); }catch(e){} });
+      var done=document.getElementById('secShopDetailBtnDone');
+      if(done) done.onclick=function(){
+        try{
+          var orders=readOrders(); for(var i=0;i<orders.length;i++){ if(String((orders[i]||{}).id||'')===String(orderId||'')){ orders[i].status='closed'; orders[i].updatedAt=Date.now(); break; } }
+          if(typeof shopWriteOrders==='function') shopWriteOrders(orders);
+          var u=String(o.username||'').trim(); if(u && u!=='אורח' && typeof pmSendToUser==='function') pmSendToUser(u,'חנות','תתחדש\nותודה על הרכישה.',{orderId:String(o.id||''),status:'closed_pickup'});
+          closeM(); renderList('pickup');
+        }catch(e){}
+      };
+      var ord=document.getElementById('secShopDetailBtnOrdered');
+      if(ord) ord.onclick=function(){ try{ addWaitingId(orderId); closeM(); renderList('orders'); }catch(e){} };
+    };
+
+    var ov=document.getElementById('secShopOverlay');
+    if(!ov){
+      ov=document.createElement('div'); ov.id='secShopOverlay'; ov.className='overlay'; ov.style.zIndex='2410';
+      ov.innerHTML='<div class="pay-modal" id="secShopRootModal" style="width:min(980px,96vw);max-width:96vw;max-height:90vh;overflow:auto;position:relative;"><button type="button" class="pay-close-x" id="secShopCloseX" aria-label="סגור">×</button><div id="secShopHost" dir="rtl"></div></div>';
+      document.body.appendChild(ov);
+      var c=document.getElementById('secShopCloseX'); if(c) c.onclick=function(){ try{ closeOverlay("secShopOverlay"); }catch(e){} };
+      ov.addEventListener('click', function(ev){ try{ var modal=document.getElementById('secShopRootModal'); if(modal && ev && ev.target && !modal.contains(ev.target)) closeOverlay("secShopOverlay"); }catch(e){} });
+    }
+    var host=document.getElementById('secShopHost');
+    if(host) host.innerHTML='<div style="padding:6px 2px 0;"><div style="display:flex;gap:10px;margin:0 0 14px;flex-wrap:wrap;"><button id="secShopPickupBtn" type="button" style="flex:1;min-width:120px;min-height:44px;border-radius:14px;border:1px solid rgba(80,255,160,.28);background:rgba(25,110,65,.28);color:#fff;font-weight:800;">איסוף</button><button id="secShopOrdersBtn" type="button" style="flex:1;min-width:120px;min-height:44px;border-radius:14px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.03);color:#fff;font-weight:800;">הזמנות</button><button id="secShopWaitingBtn" type="button" style="flex:1;min-width:120px;min-height:44px;border-radius:14px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.03);color:#fff;font-weight:800;">ממתינים</button></div><div id="secShopListPanel"></div></div>';
+    function setTab(which){
+      [['pickup','secShopPickupBtn'],['orders','secShopOrdersBtn'],['waiting','secShopWaitingBtn']].forEach(function(p){ var b=document.getElementById(p[1]); if(!b) return; var on=(p[0]===which); b.style.background=on?'rgba(25,110,65,.28)':'rgba(255,255,255,.03)'; b.style.borderColor=on?'rgba(80,255,160,.28)':'rgba(255,255,255,.14)'; });
+      window.__secShopActiveTab = which; renderList(which);
+    }
+    var bp=document.getElementById('secShopPickupBtn'), bo=document.getElementById('secShopOrdersBtn'), bw=document.getElementById('secShopWaitingBtn');
+    if(bp) bp.onclick=function(){ setTab('pickup'); }; if(bo) bo.onclick=function(){ setTab('orders'); }; if(bw) bw.onclick=function(){ setTab('waiting'); };
+    setTab(window.__secShopActiveTab || 'pickup');
+    try{ if(typeof openOverlay==='function') openOverlay('secShopOverlay'); }catch(e){ if(ov){ ov.classList.add('show'); ov.style.display='grid'; } }
+    try{ window.__secEnsureTopBackBtn && window.__secEnsureTopBackBtn(); }catch(e){}
   };
 
   window.enableManagerMode = function(persist){
