@@ -5,8 +5,8 @@
   /* left of cart button (do not overlap) */
   right: 0px;
   left:auto;
-  width:100px;
-  height:100px;
+  width:108px;
+  height:108px;
   background:transparent;
   border:none;
   padding:0;
@@ -748,7 +748,7 @@ body.menu-open::before{
 }
 .home-contact-btn{ right:8px; bottom:20px; width:103px; height:103px; }
 .home-location-btn{ right:100px; bottom:16px; width:108px; height:110px; }
-.home-profile-btn{ left:16px; top:16px; right:auto; bottom:auto; width:100px; height:100px; }
+.home-profile-btn{ left:10px; top:10px; right:auto; bottom:auto; width:100px; height:100px; }
 
 .home-contact-btn img{ width:100px; height:100px; display:block; pointer-events:none; }
 .home-location-btn img{ width:103px; height:103px; display:block; pointer-events:none; }
@@ -6638,7 +6638,7 @@ body.secretary-mode #profileBtn{ display:none !important; }
 
 /* ===== Secretary: student search under logo ===== */
 /* Logo is position:fixed (doesn't take layout space). Push the search below it using the existing safe-top var. */
-#secSearchWrap{ display:none; padding:0 14px 0; margin-top: clamp(80px, calc(var(--logo-safe-top) - 150px), 170px); }
+#secSearchWrap{ display:none; padding:0 14px 0; margin-top: calc(clamp(80px, calc(var(--logo-safe-top) - 150px), 170px) + 20px); }
 body.secretary-mode #secSearchWrap{ display:block; }
 #secStudentResults{ margin-top:8px; max-height:45vh; overflow:auto;  display:none; }
 
@@ -6707,15 +6707,15 @@ body.theme-day .leave-msg-hint{
 
 /* FORCE: home/profile icon buttons final positions */
 .home-profile-btn{
-  left:16px !important;
+  left:6px !important;
   top:16px !important;
   right:auto !important;
   bottom:auto !important;
   transform:none !important;
 }
 #homeBtn.top-home-btn, .top-home-btn{
-  right:16px !important;
-  top:16px !important;
+  right:0px !important;
+  top:11px !important;
   left:auto !important;
   bottom:auto !important;
   transform:none !important;

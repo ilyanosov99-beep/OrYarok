@@ -8303,7 +8303,10 @@ obj[dateKey].push({
 
   let _adminTab = 'home';
   let _adminProfileCardOpen = false;
-  function setAdminTab(tab){
+try{ window.setAdminTab = setAdminTab; }catch(e){}
+
+    function setAdminTab(tab){
+  if(tab==='tests') tab='main';
     _adminTab = tab || 'home';
 
     // NOTE: lessonMgmtCard is inside homeSearchCard. Do NOT hide the parent card,
@@ -8435,7 +8438,9 @@ if(_adminTab==='lessons'){
     return lines.join('\n');
   }
 
-  function renderTestOrdersFiles(){
+try{ window.renderTestOrdersFiles = renderTestOrdersFiles; }catch(e){}
+
+    function renderTestOrdersFiles(){
     const wrap = $('testOrdersList');
     if(!wrap) return;
     const orders = loadTestOrders();
@@ -18801,15 +18806,105 @@ window.enableSecretaryMode = function(persist){
 
   // Secretary: open Test Orders view (existing admin tests viewer)
   window.openSecretaryTestOrders = function(){
-    try{ if(typeof window.closeMenu === 'function') window.closeMenu(); }catch(e){}
-    try{ if(typeof window.closeProfileMenu === 'function') window.closeProfileMenu(); }catch(e){}
-    try{ if(typeof window.closeAllPages === 'function') window.closeAllPages(); }catch(e){}
-    try{ if(typeof window.openAdminPanel === 'function') window.openAdminPanel(); }catch(e){}
-    try{ if(typeof window.setAdminTab === 'function') window.setAdminTab('tests'); }catch(e){}
     try{
-      var w = document.getElementById('adminSubbarWrap');
-      if(w){ w.classList.remove('open'); w.setAttribute('aria-hidden','true'); }
-    }catch(e){}
+      if(!_secIsOn()) return;
+      let ov = document.getElementById('secTestOrdersOverlay');
+      if(!ov){
+        ov = document.createElement('div');
+        ov.id = 'secTestOrdersOverlay';
+        ov.className = 'overlay';
+        ov.style.zIndex = '2400';
+        ov.innerHTML = [
+          '<div class="pay-modal" style="width:min(980px,96vw);max-width:96vw;max-height:90vh;overflow:auto;position:relative;">',
+            '<button type="button" class="pay-close-x" id="secTestOrdersCloseX" aria-label="סגור">×</button>',
+            '<div id="secTestOrdersHost" dir="rtl"></div>',
+          '</div>'
+        ].join('');
+        document.body.appendChild(ov);
+        const closeBtn = document.getElementById('secTestOrdersCloseX');
+        if(closeBtn) closeBtn.onclick = function(){ try{ closeOverlay('secTestOrdersOverlay'); }catch(e){} };
+      }
+
+      const host = document.getElementById('secTestOrdersHost');
+      if(host){
+        host.innerHTML = [
+          '<div style="padding:6px 2px 0;">',
+            '<div style="display:flex;gap:10px;margin:0 0 14px;">',
+              '<button id="secTestsCurrentBtn" type="button" style="flex:1;min-height:44px;border-radius:14px;border:1px solid rgba(80,255,160,.28);background:rgba(25,110,65,.28);color:#fff;font-weight:800;">הזמנות טסטים</button>',
+              '<button id="secTestsFutureBtn" type="button" style="flex:1;min-height:44px;border-radius:14px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.03);color:#fff;font-weight:800;">טסטים עתידיים</button>',
+            '</div>',
+            '<div id="secTestsCurrentPanel"></div>',
+            '<div id="secTestsFuturePanel" style="display:none;color:#d9d9d9;font-size:16px;padding:10px 4px;">כפתור ריק (בהמשך נוסיף עמוד טסטים עתידיים).</div>',
+          '</div>'
+        ].join('');
+      }
+
+      function secSetTestsTab(which){
+        const current = which !== 'future';
+        const b1 = document.getElementById('secTestsCurrentBtn');
+        const b2 = document.getElementById('secTestsFutureBtn');
+        const p1 = document.getElementById('secTestsCurrentPanel');
+        const p2 = document.getElementById('secTestsFuturePanel');
+        if(b1){ b1.style.background = current ? 'rgba(25,110,65,.28)' : 'rgba(255,255,255,.03)'; b1.style.borderColor = current ? 'rgba(80,255,160,.28)' : 'rgba(255,255,255,.14)'; }
+        if(b2){ b2.style.background = current ? 'rgba(255,255,255,.03)' : 'rgba(25,110,65,.28)'; b2.style.borderColor = current ? 'rgba(255,255,255,.14)' : 'rgba(80,255,160,.28)'; }
+        if(p1) p1.style.display = current ? 'block' : 'none';
+        if(p2) p2.style.display = current ? 'none' : 'block';
+      }
+
+      function secRenderOrdersList(){
+        const panel = document.getElementById('secTestsCurrentPanel');
+        if(!panel) return;
+        let grouped = {};
+        try{ grouped = (typeof loadTestOrders === 'function' ? (loadTestOrders() || {}) : {}); }catch(e){ grouped = {}; }
+        const dateKeys = Object.keys(grouped || {}).sort((a,b)=> String(b).localeCompare(String(a)));
+        if(!dateKeys.length){
+          panel.innerHTML = '<div style="color:#d9d9d9;font-size:15px;margin:4px 2px 10px;">כל הזמנה מוצלחת נשמרת כאן לפי תאריך.</div>' +
+                            '<div style="color:#fff;font-size:18px;margin:10px 2px;">אין הזמנות להצגה</div>';
+          return;
+        }
+        let html = '<div style="color:#d9d9d9;font-size:15px;margin:4px 2px 10px;">כל הזמנה מוצלחת נשמרת כאן לפי תאריך.</div>';
+        for(const dk of dateKeys){
+          const rows = Array.isArray(grouped[dk]) ? grouped[dk].slice() : [];
+          rows.sort((a,b)=> Number((b&&b.ts)||0) - Number((a&&a.ts)||0));
+          const title = (typeof _dateTitle === 'function') ? _dateTitle(dk) : dk;
+          html += '<div style="margin:12px 0 10px;">';
+          html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);">';
+          html += '<div style="font-weight:900;color:#fff;font-size:16px;">'+ title +'</div>';
+          html += '<div style="color:#b9c7bf;font-size:12px;">'+ rows.length +' הזמנות</div>';
+          html += '</div>';
+          html += '<div style="margin-top:8px;display:flex;flex-direction:column;gap:8px;">';
+          for(const r of rows){
+            const name = (r && r.name != null) ? String(r.name) : '';
+            const tz = (r && r.tz != null) ? String(r.tz) : '';
+            const price = Number((r && r.price) || 0);
+            const ts = Number((r && r.ts) || 0);
+            const hhmm = ts ? ((typeof _hm === 'function') ? _hm(ts) : new Date(ts).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})) : '—';
+            html += '<div style="padding:10px;border-radius:12px;background:rgba(0,0,0,.18);border:1px solid rgba(255,255,255,.07);">';
+            html += '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;">';
+            html += '<div style="font-weight:800;color:#fff;">'+ (name || 'ללא שם') +'</div>';
+            html += '<div style="color:#cfd6d2;font-size:12px;">'+ hhmm +'</div>';
+            html += '</div>';
+            html += '<div style="margin-top:6px;display:flex;flex-wrap:wrap;gap:8px 10px;color:#d6e0db;font-size:13px;">';
+            html += '<span>תז: '+ (tz || '—') +'</span>';
+            html += '<span>סכום: ₪'+ (Number.isFinite(price) ? String(Math.round(price)) : '0') +'</span>';
+            html += '</div></div>';
+          }
+          html += '</div></div>';
+        }
+        panel.innerHTML = html;
+      }
+
+      const cBtn = document.getElementById('secTestsCurrentBtn');
+      const fBtn = document.getElementById('secTestsFutureBtn');
+      if(cBtn) cBtn.onclick = function(){ secSetTestsTab('current'); };
+      if(fBtn) fBtn.onclick = function(){ secSetTestsTab('future'); };
+      secSetTestsTab('current');
+      secRenderOrdersList();
+
+      try{ openOverlay('secTestOrdersOverlay'); }catch(e){ if(ov){ ov.classList.add('show'); ov.style.display='grid'; } }
+    }catch(err){
+      console.warn('openSecretaryTestOrders failed', err);
+    }
   };
 
   // Secretary Mail UI
