@@ -4583,12 +4583,26 @@ function updateEdgeHandles(){
       var hw2 = lh.getBoundingClientRect().width || 28;
       var hh2 = lh.getBoundingClientRect().height || 48;
 
-      // FIXED profile handle position (top-left of screen) — single source of truth
-      // Removes menu/open-state driven relocation that kept overriding CSS changes.
-      var x2 = 12;
-      var y2 = 84;
-      if(vw){ x2 = Math.max(0, Math.min(vw - hw2, x2)); }
-      if(vh){ y2 = Math.max(0, Math.min(vh - hh2, y2)); }
+      var x2 = - (hw2/2);
+      var y2 = 120;
+
+      if(sm){
+        var r2 = sm.getBoundingClientRect();
+        y2 = r2.top + 22;
+
+        var open2 = document.body.classList.contains("student-menu-open") || document.body.classList.contains("student-menu-closing");
+        if(open2){
+          x2 = r2.right - (hw2/2);
+        }else{
+          x2 = - (hw2/2);
+        }
+      }
+
+      // shift down by half of the handle height
+      y2 = y2 + (hh2/2);
+
+if(vh){ y2 = Math.max(60, Math.min(vh - hh2 - 60, y2)); }
+      x2 = Math.max(-hw2/2, Math.min(vw - hw2/2, x2));
 
       lh.style.left = x2 + "px";
       lh.style.top  = y2 + "px";
