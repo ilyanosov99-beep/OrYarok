@@ -5694,7 +5694,7 @@ body.dock-open .input-dock{ transform: translateY(0); opacity:1; pointer-events:
   cursor:pointer;
 }
 
-/* Pay open: keep welcome logo behind overlay */
+/* Keep home logo persistent (do not hide on menus/sub-pages/popups) */
 body.pay-open .welcome-logo,
 body.popup-open .welcome-logo,
 body.page-open .welcome-logo,
@@ -5702,7 +5702,11 @@ body.start-open .welcome-logo,
 body.shop-open .welcome-logo,
 body.menu-open .welcome-logo,
 body.student-menu-open .welcome-logo,
-body.auth-open .welcome-logo{ display:none !important; }
+body.auth-open .welcome-logo{
+  display:block !important;
+  opacity:1 !important;
+  visibility:visible !important;
+}
 
 /* ===== Private Messages Frame ===== */
 .pm-frame{
@@ -5774,6 +5778,13 @@ body.theme-day .ads-board{
   transform:scale(0.502);
   transform-origin: bottom left;
   /* keep same base sizing so frame + viewport stay perfectly matched */
+}
+
+/* Mobile only: raise closed ads board (frame+viewport together via parent) above START button */
+@media (max-width: 767.98px){
+  .ads-board.ads-mini{
+    bottom: calc(2vh + var(--safe-bottom, 0px) + 125px) !important;
+  }
 }
 
 /* Toggle buttons (Close X / Expand) */
@@ -6489,30 +6500,53 @@ body.theme-day .leave-msg-hint{
     transform: translateX(-50%) !important;
     width: min(40vw, 420px) !important;
     max-width: 420px !important;
-    z-index: 3400 !important; /* below popups/subpages */
+    z-index: 16001 !important; /* keep visible across menus/sub-pages/popups */
   }
 
-  /* Keep ads board + frame + content on one locked container (same size in mini/open on tablet) */
-  body:not(.admin-open):not(.manager-open) .ads-board,
-  body:not(.admin-open):not(.manager-open) .ads-board.ads-mini{
+  /* Tablet ads board (cleaned): locked single mode + no controls */
+  body:not(.admin-open):not(.manager-open) .ads-board{
+    position: fixed !important;
     left: 44px !important;
     right: auto !important;
     top: 150px !important;
     bottom: auto !important;
+    width: min(34vw, 360px) !important; /* parent-only size control */
+    max-width: min(34vw, 360px) !important;
     height: auto !important;
-    width: min(28vw, 300px) !important;
-    max-width: min(28vw, 300px) !important;
     aspect-ratio: 9 / 16 !important;
-    transform: none !important;
-    transform-origin: center center !important;
-  }
+    transform: none !important; /* cancel left:50% centering + mini scale */
+    transition: none !important;
+    transform-origin: top left !important;
 
-  /* Slight frame tuning on tablet so content stays inside while taller */
-  body:not(.admin-open):not(.manager-open) .ads-board{
+    /* frame/viewport tuning so board stays inside frame */
     --ads-vp-top: 8px;
-    --ads-vp-bottom: 42px;
+    --ads-vp-bottom: 58px; /* shrink board from bottom so it stays inside frame */
     --ads-frame-top: -10%;
     --ads-frame-height: 110%;
+  }
+
+  /* Tablet ads board: ignore JS class toggles visually (same position/size always) */
+  body:not(.admin-open):not(.manager-open) .ads-board .ads-inner,
+  body:not(.admin-open):not(.manager-open) .ads-board .ads-shell,
+  body:not(.admin-open):not(.manager-open) .ads-board .ads-flip-wrap{
+    transform: none !important;
+    transition: none !important;
+  }
+
+  /* Tablet ads board: hide mini/expand controls */
+  body:not(.admin-open):not(.manager-open) .ads-board .ads-close-btn,
+  body:not(.admin-open):not(.manager-open) .ads-board .ads-float-toggle{
+    display: none !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+
+  /* Tablet ads viewport fit inside frame (avoid side overflow / bottom spill) */
+  body:not(.admin-open):not(.manager-open) .ads-board .ads-viewport{
+    left: 8px !important;
+    right: 8px !important;
+    /* keep logical insets untouched (RTL can zero width if reset to auto) */
+    bottom: var(--ads-vp-bottom) !important;
   }
 
 
