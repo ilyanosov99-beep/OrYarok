@@ -18806,6 +18806,20 @@ window.enableSecretaryMode = function(persist){
     try{ if(typeof window.appLogout === 'function') window.appLogout(); }catch(e){}
   };
 
+  // Secretary: open Admin Lessons Management (reuse same admin window, no duplication)
+  window.openSecretaryLessonsManagement = function(){
+    try{
+      if(!_secIsOn()) return;
+      try{ if(typeof window.closeMenu === 'function') window.closeMenu(); }catch(e){}
+      try{ if(typeof window.openAdminPanel === 'function') window.openAdminPanel(); }catch(e){}
+      try{ if(typeof window.setAdminTab === 'function') window.setAdminTab('lessons'); }catch(e){}
+      try{
+        var asw = document.getElementById('adminSubbarWrap');
+        if(asw){ asw.classList.remove('open'); asw.setAttribute('aria-hidden','true'); }
+      }catch(e){}
+    }catch(e){}
+  };
+
   // Secretary: open Test Orders view (existing admin tests viewer)
   window.openSecretaryTestOrders = function(){
     try{
