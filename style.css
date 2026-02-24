@@ -5695,7 +5695,14 @@ body.dock-open .input-dock{ transform: translateY(0); opacity:1; pointer-events:
 }
 
 /* Pay open: keep welcome logo behind overlay */
-body.pay-open .welcome-logo{ display:none !important; }
+body.pay-open .welcome-logo,
+body.popup-open .welcome-logo,
+body.page-open .welcome-logo,
+body.start-open .welcome-logo,
+body.shop-open .welcome-logo,
+body.menu-open .welcome-logo,
+body.student-menu-open .welcome-logo,
+body.auth-open .welcome-logo{ display:none !important; }
 
 /* ===== Private Messages Frame ===== */
 .pm-frame{
@@ -6469,6 +6476,74 @@ body.theme-day .leave-msg-hint{
   .page-inner{
     width: min(100%, 760px);
     margin-inline: auto;
+  }
+
+  /* Tablet Home logo (strong lock) */
+  .welcome-logo{
+    position: fixed !important;
+    top: -112px !important;
+    left: 50% !important;
+    right: auto !important;
+    bottom: auto !important;
+    margin: 0 !important;
+    transform: translateX(-50%) !important;
+    width: min(40vw, 420px) !important;
+    max-width: 420px !important;
+    z-index: 3400 !important; /* below popups/subpages */
+  }
+
+  /* Keep ads board + frame + content on one locked container (same size in mini/open on tablet) */
+  body:not(.admin-open):not(.manager-open) .ads-board,
+  body:not(.admin-open):not(.manager-open) .ads-board.ads-mini{
+    left: 44px !important;
+    right: auto !important;
+    top: 150px !important;
+    bottom: auto !important;
+    height: auto !important;
+    width: min(28vw, 300px) !important;
+    max-width: min(28vw, 300px) !important;
+    aspect-ratio: 9 / 16 !important;
+    transform: none !important;
+    transform-origin: center center !important;
+  }
+
+  /* Slight frame tuning on tablet so content stays inside while taller */
+  body:not(.admin-open):not(.manager-open) .ads-board{
+    --ads-vp-top: 8px;
+    --ads-vp-bottom: 42px;
+    --ads-frame-top: -10%;
+    --ads-frame-height: 110%;
+  }
+
+
+  /* Tablet home buttons: bigger and perfectly aligned on same axis */
+  body:not(.admin-open):not(.manager-open) .bottom-actions{
+    left: auto !important;
+    right: 46px !important;
+    width: auto !important;
+    bottom: calc(var(--safe-bottom, env(safe-area-inset-bottom, 0px)) + 56px) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
+    padding: 0 !important;
+  }
+  body:not(.admin-open):not(.manager-open) .bottom-actions .bottom-left,
+  body:not(.admin-open):not(.manager-open) .bottom-actions .bottom-right{
+    transform: none !important;
+  }
+  body:not(.admin-open):not(.manager-open) .bottom-actions #startButton img,
+  body:not(.admin-open):not(.manager-open) .bottom-actions #shopBtn img,
+  body:not(.admin-open):not(.manager-open) .bottom-actions .home-shop-btn img{
+    width: clamp(154px, 14.7vw, 214px) !important;
+  }
+  body:not(.admin-open):not(.manager-open) .bottom-actions #startButton img{
+    --img-base-transform: scale(1.63) translateX(0px) !important;
+  }
+  body:not(.admin-open):not(.manager-open) .bottom-actions #shopBtn img,
+  body:not(.admin-open):not(.manager-open) .bottom-actions .home-shop-btn img{
+    --img-base-transform: scale(1.73) translateX(0px) !important;
   }
 }
 
