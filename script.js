@@ -1835,13 +1835,6 @@ function timerUpdateStudentProfileAndDb(username, deltaLessons, entry){
     if(done<0) done=0;
     prof.lessonsDone = done;
 
-    var left = prof.lessonsLeft!=null ? Number(prof.lessonsLeft) : null;
-    if(left!=null && Number.isFinite(left)){
-      left -= (deltaLessons|0);
-      if(left<0) left=0;
-      prof.lessonsLeft = left;
-    }
-
     if(!Array.isArray(prof.lessonsLog)) prof.lessonsLog=[];
     prof.lessonsLog.unshift(entry);
     if(prof.lessonsLog.length>200) prof.lessonsLog.length=200;
@@ -3696,7 +3689,6 @@ function guessPhone(obj){
     p.testDate = normDate(pick(rec, ["testDate","nextTestDate","test_date","next_test_date","test","תאריךלטסט","טסט"]));
 
     p.lessonsDone = pick(rec, ["lessonsDone","lessonsCompleted","doneLessons","completedLessons","lessons_done","שיעוריםבוצעו","שיעוריםבבוצעו"]);
-    p.lessonsLeft = pick(rec, ["lessonsLeft","lessonsRemaining","remainingLessons","lessons_left","שיעוריםשנשארו"]);
     p.testsTaken  = pick(rec, ["testsTaken","testsDone","tests","testCount","tests_taken","כמותטסטים","טסטים"]);
 
     // Preserve outside-training data (חוץ) if exists
@@ -4622,15 +4614,6 @@ try{ closeProfileMenu(); }catch(e){}
             var due0 = parseFloat(obj.due);
             if(isFinite(due0) && due0 > 0) initAmt = due0;
 
-            if(!isFinite(initAmt) && u){
-              try{
-                var p = null;
-                try{ p = JSON.parse(DBStorage.getItem(payKeyProfile(u))||"null"); }catch(_e){ p = null; }
-                var ll = p ? parseFloat(p.lessonsLeft) : NaN;
-                if(isFinite(ll) && ll > 0) initAmt = ll * 150;
-              }catch(_e2){}
-            }
-
             if(isFinite(initAmt) && initAmt > 0){
               obj.ledger.unshift({
                 id: "ob_" + Date.now(),
@@ -4917,7 +4900,7 @@ pay.lastPayment = payFmtDateTime(ts);
       DBStorage.setItem(ckey, String(dueNow));
     }catch(e){}
 
-    // Update student profile (lessonsLeft + payment summary)
+    // Update student profile (payment summary)
     try{
       var profKey = payKeyProfile(u);
       var prof = payLsGet(profKey, null);
@@ -5000,16 +4983,7 @@ function financeGetStudentBalanceByTz(tz, username){
     var m = (meta && typeof meta === 'object') ? meta : {};
     var note = String(m.note || 'תשלום מזכירה');
 
-    // Canonical balance source (same pipeline everywhere)
-    var beforeBal = 0;
-    try{
-      var raw = DBStorage.getItem(keyStudentCredit(tz));
-      var n = Number(String(raw == null ? '' : raw).replace(/,/g,''));
-      beforeBal = isFinite(n) ? n : 0;
-    }catch(e){ beforeBal = 0; }
-    var afterBal = Math.round((beforeBal + amt) * 100) / 100;
-
-    // Record receipt/ledger on canonical TZ key
+    // Record receipt/ledger on canonical TZ key (payAddReceipt updates ledger + due + credit key)
     var receipt = payAddReceipt(tz, amt, note, 0);
 
     // enrich last payment ledger meta (same canonical TZ key)
@@ -5028,20 +5002,26 @@ function financeGetStudentBalanceByTz(tz, username){
           if(m.note) e.meta.note = String(m.note);
         }
       }
-      // Keep display due aligned to canonical balance source
-      payObj.due = afterBal;
+      // Keep display due derived from ledger (single source of truth)
+      var dueNow = Number(payObj && payObj.due);
+      if(!isFinite(dueNow)) dueNow = Number(payLedgerSum(payObj));
+      if(!isFinite(dueNow)) dueNow = 0;
+      payObj.due = dueNow;
       payLsSet(keyP, payObj);
-    }catch(_e){}
 
-    // Single source of truth balance key
-    try{ DBStorage.setItem(keyStudentCredit(tz), String(afterBal)); }catch(_e){}
+      try{
+        var prof = payLsGet(payKeyProfile(tz), {}) || {};
+        if(typeof prof !== 'object') prof = {};
+        prof.paymentsDue = dueNow;
+        payLsSet(payKeyProfile(tz), prof);
+      }catch(__e){}
 
-    // Keep profile summary aligned to the same pipeline value
-    try{
-      var prof = payLsGet(payKeyProfile(tz), {}) || {};
-      if(typeof prof !== 'object') prof = {};
-      prof.paymentsDue = afterBal;
-      payLsSet(payKeyProfile(tz), prof);
+      try{
+        if(receipt && typeof receipt === 'object'){
+          receipt.balance = dueNow;
+          receipt.due = dueNow;
+        }
+      }catch(__e2){}
     }catch(_e){}
 
     return receipt;
@@ -8409,6 +8389,9 @@ obj[dateKey].push({
       units
     };
 
+    // Report-only function: ignore any financial fields if passed by mistake.
+    // Charging must go only through FinanceAPI.chargeLesson(...).
+
     // De-duplicate identical records (prevents double blocks in "ניהול שיעורים")
     const sMs = _getStartMs(rec);
     const eMs = _getEndMs(rec);
@@ -8422,7 +8405,6 @@ obj[dateKey].push({
       return (Math.abs(xs - sMs) <= 1000) && (Math.abs(xe - eMs) <= 1000);
     });
 
-    var addedNew = false;
     if(dupe){
       // Keep the existing row, but enrich if needed
       if(rec.fullName && !dupe.fullName) dupe.fullName = rec.fullName;
@@ -8431,35 +8413,11 @@ obj[dateKey].push({
       if(rec.endMs && (!dupe.endMs && !dupe.endedAtMs)) dupe.endMs = rec.endMs;
     } else {
       reports[key].push(rec);
-      addedNew = true;
     }
     saveLessonReports(reports);
 
-    // Connect lessons -> payments/credit (יתרה): every lesson reduces credit by ₪150 per 1.0 unit (0.5 => ₪75)
-    try{
-      if(addedNew){
-        var uTz = String(tz||'').trim();
-        var uUnits = Number(units);
-        if(uTz && isFinite(uUnits) && uUnits > 0){
-          var charge = -Math.round((150 * uUnits) * 100) / 100;
-          var payObj = payLsGet(payKeyStudent(uTz), null);
-          if(!payObj || typeof payObj !== "object") payObj = {};
-          payEnsureLedger(payObj, uTz);
-          payLedgerAdd(payObj, {
-            ts: Number.isFinite(endMs) ? Number(endMs) : Date.now(),
-            type: (String(type||'lesson') === 'outside') ? 'outside_lesson_charge' : 'lesson_charge',
-            amount: charge,
-            note: ((String(type||'lesson') === 'outside') ? 'שיעור חוץ' : 'שיעור') + ' (' + uUnits + ')',
-            meta: { units: uUnits }
-          });
-          payLsSet(payKeyStudent(uTz), payObj);
-          try{
-            var dueNow = Number(payObj.due);
-            if(isFinite(dueNow)) DBStorage.setItem(keyStudentCredit(uTz), String(dueNow));
-          }catch(e2){}
-        }
-      }
-    }catch(e){}
+    // Money charge is handled ONLY in addCompletedLessonToStudent -> FinanceAPI.chargeLesson.
+    // This function is report/log only, to prevent duplicate lesson charges.
     try{ renderLessonMgmtFiles(); }catch(e){}
   }
 
@@ -8863,7 +8821,6 @@ function openProfileCard(tz) {
     const done = (_lessonsDoneFromProfile(prof) ?? _lessonsDoneFromProfile(regE) ?? (s ? (studentLessonsDone(s) ?? null) : null));
     if (rLessonsDone) rLessonsDone.textContent = (done != null && done !== '' ? String(done) : '—');
 
-    // Lessons left (remaining lessons) – prefer saved profile/registry, fallback to payments-derived calc
 
     try{
       var cm2 = 0;
@@ -9156,7 +9113,6 @@ function onSearchTyping() {
         const prog = rawProg ? tryParseJson(rawProg) : null;
         if (prog && typeof prog === "object") {
           if (rec.lessonsDone == null && prog.lessonsDone != null) rec.lessonsDone = prog.lessonsDone;
-          if (rec.lessonsLeft == null && prog.lessonsLeft != null) rec.lessonsLeft = prog.lessonsLeft;
           if (rec.testDate == null && prog.testDate != null) rec.testDate = prog.testDate;
         }
       }catch(e){}
@@ -9455,7 +9411,6 @@ function getStudent(tz) {
 
     if (prog && typeof prog === "object") {
       if (out.lessonsDone == null && prog.lessonsDone != null) out.lessonsDone = prog.lessonsDone;
-      if (out.lessonsLeft == null && prog.lessonsLeft != null) out.lessonsLeft = prog.lessonsLeft;
       if (out.testDate == null && prog.testDate != null) out.testDate = prog.testDate;
     }
     if (pay && typeof pay === "object") {
@@ -9667,7 +9622,6 @@ function getStudent(tz) {
           license:   studentLicenseType(s) || ''
         };
         try{ prof.lessonsDone = studentLessonsDone(s) || 0; }catch(e){ prof.lessonsDone = 0; }
-        try{ prof.lessonsLeft = readAny(s, ['lessonsLeft','lessons_left','שיעורים שנשארו','שיעורים_שנשארו','remainingLessons','lessonsRemaining']) || ""; }catch(e){}
       }
 
       if(!Array.isArray(prof.outsideLog)) prof.outsideLog = [];
@@ -11077,26 +11031,6 @@ document.addEventListener('input', (e) => {
       var newDone = curDone + units;
       prof.lessonsDone = Math.round(newDone * 2) / 2;
 
-      // Update lessonsLeft (round to 0.5). Not tied to money balance.
-      var curLeft = parseFloat(prof.lessonsLeft);
-      if (!isFinite(curLeft)) {
-        // Try read from registry/student record
-        try {
-          var st = null;
-          try { st = getStudent(tz) || {}; } catch (e) { st = {}; }
-          var rawLeft = null;
-          if (st && typeof st === 'object') {
-            rawLeft = readAny(st, ['lessonsLeft','lessons_left','remainingLessons','lessonsRemaining','שיעוריםשנשארו']);
-          }
-          curLeft = parseFloat(rawLeft);
-        } catch (e) {}
-      }
-      if (isFinite(curLeft)) {
-        var newLeft = curLeft - units;
-        if (newLeft < 0) newLeft = 0;
-        prof.lessonsLeft = Math.round(newLeft * 2) / 2;
-      }
-
       // Payments: charge lesson via FinanceAPI (single money source of truth)
       // Pull queue override flags safely (avoid undefined variable crash on lesson finish)
       var __allowNegativeLessonCharge = false;
@@ -11175,7 +11109,6 @@ document.addEventListener('input', (e) => {
         var pObj = pRaw ? JSON.parse(pRaw) : {};
         if(!pObj || typeof pObj !== "object") pObj = {};
         pObj.lessonsDone = prof.lessonsDone;
-        if(prof.lessonsLeft != null) pObj.lessonsLeft = prof.lessonsLeft;
         if(!Array.isArray(pObj.completedLessonsLog)) pObj.completedLessonsLog = [];
         // keep a bounded copy (avoid huge storage)
         try{
@@ -11194,7 +11127,6 @@ document.addEventListener('input', (e) => {
             for(var i=0;i<reg.length;i++){
               if(reg[i] && String(reg[i].tz||"") === String(tz)){
                 reg[i].lessonsDone = prof.lessonsDone;
-                if(prof.lessonsLeft != null) reg[i].lessonsLeft = prof.lessonsLeft;
                 if(payObj && payObj.due != null) reg[i].due = payObj.due;
               }
             }
@@ -11205,7 +11137,6 @@ document.addEventListener('input', (e) => {
             reg[key] = Object.assign({}, prev, {
               tz: String(tz),
               lessonsDone: prof.lessonsDone,
-              lessonsLeft: (prof.lessonsLeft != null ? prof.lessonsLeft : prev.lessonsLeft),
               due: (payObj && payObj.due != null ? payObj.due : prev.due)
             });
             DBStorage.setItem("students_registry_v1", JSON.stringify(reg));
@@ -11270,7 +11201,7 @@ document.addEventListener('input', (e) => {
           }catch(e){}
           try{
             if(DBStorage.getItem("student_progress_" + ak)){
-              var p2 = { lessonsDone: prof.lessonsDone, lessonsLeft: prof.lessonsLeft, completedLessonsLog: (Array.isArray(prof.completedLessonsLog)? prof.completedLessonsLog.slice(-120):[]) };
+              var p2 = { lessonsDone: prof.lessonsDone, completedLessonsLog: (Array.isArray(prof.completedLessonsLog)? prof.completedLessonsLog.slice(-120):[]) };
               DBStorage.setItem("student_progress_" + ak, JSON.stringify(p2));
             }
           }catch(e){}
@@ -12914,44 +12845,6 @@ function renderSecretaryStudentResults(q){
     tz = normStr(tz);
     if(!tz) return;
     var prof = getStudentProfile(tz) || {};
-    // lessonsLeft is read-only and derived from money due
-    var computedLeft = null;
-    // Remaining lessons: try profile -> registry -> compute total - done
-    try{
-      var ll = parseFloat(prof.lessonsLeft);
-      if(isFinite(ll)) computedLeft = Math.round(ll*2)/2;
-    }catch(e){}
-    if(computedLeft==null){
-      try{
-        var st = null;
-        try{ st = getStudent(tz) || {}; }catch(e){ st = {}; }
-        var raw = readAny(st, ['lessonsLeft','lessons_left','remainingLessons','lessonsRemaining','שיעוריםשנשארו','שיעורים שנותרו','שיעורים שנשארו','יתרת שיעורים']);
-        var ll2 = parseFloat(raw);
-        if(isFinite(ll2)) computedLeft = Math.round(ll2*2)/2;
-      }catch(e){}
-    }
-    if(computedLeft==null){
-      try{
-        var st2 = null;
-        try{ st2 = getStudent(tz) || {}; }catch(e){ st2 = {}; }
-        var totalRaw = readAny(prof, ['lessonsTotal','totalLessons','lessonsPurchased','purchasedLessons','lessonsCount','lessons','כמות שיעורים']);
-        if(!isFinite(parseFloat(totalRaw))){
-          totalRaw = readAny(st2, ['lessonsTotal','totalLessons','lessonsPurchased','purchasedLessons','lessonsCount','lessons','כמות שיעורים']);
-        }
-        var total = parseFloat(totalRaw);
-
-        var doneRaw = readAny(prof, ['lessonsDone','lessonsCompleted','doneLessons','completedLessons','lessons_done']);
-        var done = parseFloat(doneRaw);
-        if(!isFinite(done)){
-          try{ done = studentLessonsDone(prof) || studentLessonsDone(st2) || 0; }catch(e){ done = 0; }
-        }
-        if(isFinite(total) && isFinite(done)){
-          var left = total - done;
-          if(left < 0) left = 0;
-          computedLeft = Math.round(left*2)/2;
-        }
-      }catch(e){}
-    }
 
 
 var title = $("mgrStudentModalTitle");
@@ -12963,7 +12856,6 @@ var title = $("mgrStudentModalTitle");
       {k:"טלפון", key:"phone", v: normStr(prof.phone || "")},
       {k:"פרוגרס", key:"progress", v: normStr(prof.progress || prof.prog || prof.progressText || "")},
       {k:"שיעורים שבוצעו", key:"lessonsDone", v: (prof.lessonsDone!=null ? String(prof.lessonsDone) : normStr(prof.completedLessons || ""))},
-      {k:"יתרת שיעורים", key:"lessonsLeft", v: (computedLeft!=null ? fmtHalfLesson(computedLeft) : (prof.lessonsLeft!=null ? String(prof.lessonsLeft) : normStr(prof.leftLessons || ""))), ro:true},
       {k:"סוג רישיון", key:"licenseType", v: normStr(prof.licenseType || prof.license || "")},
       {k:"הערה", key:"note", v: normStr(prof.note || prof.notes || "")}
     ];
@@ -13019,9 +12911,6 @@ var title = $("mgrStudentModalTitle");
       if(!isFinite(n)) n = 0;
       n = Math.round(n*2)/2;
       prof.lessonsDone = n;
-    } else if(key === "lessonsLeft"){
-      // read-only (derived from money due)
-      return;
     } else if(key === "licenseType"){
       prof.licenseType = normStr(val);
       prof.license = normStr(val);
