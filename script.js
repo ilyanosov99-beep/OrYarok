@@ -5122,6 +5122,277 @@ pay.lastPayment = payFmtDateTime(ts);
     return receipt;
   }
 
+  // Central finance API (single pipeline / source of truth)
+  
+function financeGetStudentBalanceByTz(tz){
+    tz = String(tz||'').trim();
+    if(!tz) return { balance: 0, due: 0 };
+
+    // Single canonical pipeline for all screens: student_credit_money_<TZ>
+    try{
+      var raw = DBStorage.getItem(keyStudentCredit(tz));
+      var n = Number(String(raw == null ? '' : raw).replace(/,/g,''));
+      if(isFinite(n)) return { balance: n, due: n };
+    }catch(e){}
+
+    // Fallback only if credit is missing (do not merge legacy/new here)
+    try{
+      var keyP = payKeyStudent(tz);
+      var payObj = payLsGet(keyP, null);
+      if(payObj && typeof payObj === 'object'){
+        payEnsureLedger(payObj, tz);
+        var due = Number(payObj.due);
+        if(!isFinite(due)) due = Number(payLedgerSum(payObj));
+        if(isFinite(due)){
+          try{ DBStorage.setItem(keyStudentCredit(tz), String(due)); }catch(_e){}
+          return { balance: due, due: due };
+        }
+      }
+    }catch(e){}
+
+    return { balance: 0, due: 0 };
+  }
+
+  function financeAddPaymentByTz(tz, amount, meta){
+    tz = String(tz||'').trim();
+    var amt = Number(amount);
+    if(!tz) throw new Error('חסר ת״ז');
+    if(!isFinite(amt) || amt <= 0) throw new Error('סכום לא תקין');
+
+    var m = (meta && typeof meta === 'object') ? meta : {};
+    var note = String(m.note || 'תשלום מזכירה');
+
+    // Canonical balance source (same pipeline everywhere)
+    var beforeBal = 0;
+    try{
+      var raw = DBStorage.getItem(keyStudentCredit(tz));
+      var n = Number(String(raw == null ? '' : raw).replace(/,/g,''));
+      beforeBal = isFinite(n) ? n : 0;
+    }catch(e){ beforeBal = 0; }
+    var afterBal = Math.round((beforeBal + amt) * 100) / 100;
+
+    // Record receipt/ledger on canonical TZ key
+    var receipt = payAddReceipt(tz, amt, note, 0);
+
+    // enrich last payment ledger meta (same canonical TZ key)
+    try{
+      var keyP = payKeyStudent(tz);
+      var payObj = payLsGet(keyP, {}) || {};
+      payEnsureLedger(payObj, tz);
+      if(Array.isArray(payObj.ledger) && payObj.ledger.length){
+        var e = payObj.ledger[0];
+        if(e && e.type === 'payment'){
+          if(!e.meta || typeof e.meta !== 'object') e.meta = {};
+          e.meta.method = String(m.method || e.meta.method || '');
+          e.meta.source = String(m.source || e.meta.source || 'secretary_payment');
+          if(m.receiptRef) e.meta.receiptRef = String(m.receiptRef);
+          if(m.createdByRole) e.meta.createdByRole = String(m.createdByRole);
+          if(m.note) e.meta.note = String(m.note);
+        }
+      }
+      // Keep display due aligned to canonical balance source
+      payObj.due = afterBal;
+      payLsSet(keyP, payObj);
+    }catch(_e){}
+
+    // Single source of truth balance key
+    try{ DBStorage.setItem(keyStudentCredit(tz), String(afterBal)); }catch(_e){}
+
+    // Keep profile summary aligned to the same pipeline value
+    try{
+      var prof = payLsGet(payKeyProfile(tz), {}) || {};
+      if(typeof prof !== 'object') prof = {};
+      prof.paymentsDue = afterBal;
+      payLsSet(payKeyProfile(tz), prof);
+    }catch(_e){}
+
+    return receipt;
+  }
+
+  function financeCleanupLegacyStorage(){
+    var report = { scanned: 0, migrated: 0, removed: 0, skipped: 0, errors: 0 };
+    var seen = {};
+    function _num(v){
+      try{
+        var n = Number(String(v == null ? '' : v).replace(/,/g,''));
+        return isFinite(n) ? n : null;
+      }catch(e){ return null; }
+    }
+    function _mergePay(dst, src, tz){
+      if(!dst || typeof dst !== 'object') dst = {};
+      if(!src || typeof src !== 'object') src = {};
+      try{ payEnsureLedger(dst, tz); }catch(e){}
+      try{ payEnsureLedger(src, tz); }catch(e){}
+      try{
+        var dLed = Array.isArray(dst.ledger) ? dst.ledger.slice() : [];
+        var sLed = Array.isArray(src.ledger) ? src.ledger.slice() : [];
+        var out = [];
+        var map = {};
+        function pushLedger(arr){
+          for(var i=0;i<arr.length;i++){
+            var e = arr[i];
+            if(!e || typeof e !== 'object') continue;
+            var k = String(e.id || '') || [String(e.type||''), String(e.ts||''), String(e.amount||''), String(e.note||'')].join('|');
+            if(map[k]) continue;
+            map[k] = 1;
+            out.push(e);
+          }
+        }
+        pushLedger(dLed); pushLedger(sLed);
+        out.sort(function(a,b){ return Number((b&&b.ts)||0) - Number((a&&a.ts)||0); });
+        dst.ledger = out;
+      }catch(e){}
+      try{
+        var dh = Array.isArray(dst.history) ? dst.history.slice() : [];
+        var sh = Array.isArray(src.history) ? src.history.slice() : [];
+        var hout = [];
+        var hmap = {};
+        function pushHist(arr){
+          for(var i=0;i<arr.length;i++){
+            var r = arr[i];
+            if(!r || typeof r !== 'object') continue;
+            var hk = String(r.id || '') || [String(r.ts||''), String(r.amount||''), String(r.user||''), String(r.note||'')].join('|');
+            if(hmap[hk]) continue;
+            hmap[hk] = 1;
+            hout.push(r);
+          }
+        }
+        pushHist(dh); pushHist(sh);
+        hout.sort(function(a,b){ return Number((b&&b.ts)||0) - Number((a&&a.ts)||0); });
+        if(hout.length > 120) hout.length = 120;
+        dst.history = hout;
+      }catch(e){}
+      try{
+        var paidA = _num(dst.paid); if(paidA == null) paidA = _num(dst.paidTotal);
+        var paidB = _num(src.paid); if(paidB == null) paidB = _num(src.paidTotal);
+        var paid = Math.max(paidA == null ? 0 : paidA, paidB == null ? 0 : paidB);
+        dst.paid = paid;
+        dst.paidTotal = paid;
+      }catch(e){}
+      try{
+        var lpA = Number(dst.lastPaymentAtMs || 0);
+        var lpB = Number(src.lastPaymentAtMs || 0);
+        if(lpB > lpA){
+          dst.lastPaymentAtMs = src.lastPaymentAtMs;
+          if(src.lastPayment) dst.lastPayment = src.lastPayment;
+          if(src.note) dst.note = src.note;
+        }else{
+          if(!dst.lastPayment && src.lastPayment) dst.lastPayment = src.lastPayment;
+          if(!dst.note && src.note) dst.note = src.note;
+        }
+      }catch(e){}
+      try{
+        var la = _num(dst.lessonsPurchased);
+        var lb = _num(src.lessonsPurchased);
+        if(la == null) la = 0;
+        if(lb == null) lb = 0;
+        dst.lessonsPurchased = Math.max(la, lb);
+      }catch(e){}
+      try{
+        payEnsureLedger(dst, tz);
+        dst.due = payRound2(payLedgerSum(dst));
+      }catch(e){}
+      return dst;
+    }
+
+    try{
+      var keys = [];
+      try{
+        if(typeof localStorage !== 'undefined' && localStorage && typeof localStorage.length === 'number'){
+          for(var i=0;i<localStorage.length;i++){
+            var k = localStorage.key(i);
+            if(typeof k === 'string') keys.push(k);
+          }
+        }
+      }catch(e){}
+      try{
+        var mem = DBStorage && DBStorage._mem;
+        if(mem && typeof mem === 'object'){
+          for(var mk in mem){
+            if(Object.prototype.hasOwnProperty.call(mem, mk)) keys.push(String(mk));
+          }
+        }
+      }catch(e){}
+      var uniq = [];
+      for(var u=0;u<keys.length;u++){
+        var kk = String(keys[u]||'');
+        if(!kk || seen[kk]) continue;
+        seen[kk] = 1;
+        uniq.push(kk);
+      }
+
+      for(var j=0;j<uniq.length;j++){
+        var key = uniq[j];
+        if(key.indexOf('student_payments_') !== 0) continue;
+        report.scanned++;
+        var suffix = String(key.substring('student_payments_'.length) || '').trim();
+        if(!suffix) { report.skipped++; continue; }
+        if(/^\d{9}$/.test(suffix)) continue;
+
+        var tz = '';
+        try{ if(typeof resolveStudentTzFromUsername === 'function') tz = String(resolveStudentTzFromUsername(suffix) || '').trim(); }catch(e){}
+        if(!/^\d{9}$/.test(tz)){ report.skipped++; continue; }
+
+        try{
+          var legacyObj = payLsGet(key, null);
+          if(!legacyObj || typeof legacyObj !== 'object'){ report.skipped++; continue; }
+
+          var canonKey = payKeyStudent(tz);
+          var canonObj = payLsGet(canonKey, null);
+          var merged = _mergePay(canonObj, legacyObj, tz);
+          payLsSet(canonKey, merged);
+
+          try{
+            var legacyCreditKey = keyStudentCredit(suffix);
+            var canonCreditKey = keyStudentCredit(tz);
+            var canonCredit = _num(DBStorage.getItem(canonCreditKey));
+            var legacyCredit = _num(DBStorage.getItem(legacyCreditKey));
+            var dueNow = _num(merged && merged.due);
+            if(dueNow == null) dueNow = _num(payLedgerSum(merged));
+            var finalCredit = dueNow;
+            if(finalCredit == null) finalCredit = Math.max(canonCredit == null ? 0 : canonCredit, legacyCredit == null ? 0 : legacyCredit);
+            DBStorage.setItem(canonCreditKey, String(finalCredit == null ? 0 : finalCredit));
+            if(legacyCreditKey !== canonCreditKey && DBStorage.getItem(legacyCreditKey) != null){
+              DBStorage.removeItem(legacyCreditKey);
+              report.removed++;
+            }
+          }catch(e){ report.errors++; }
+
+          if(key !== canonKey){
+            DBStorage.removeItem(key);
+            report.removed++;
+          }
+          report.migrated++;
+        }catch(e){
+          report.errors++;
+        }
+      }
+    }catch(e){
+      report.errors++;
+    }
+    return report;
+  }
+
+  function financeRunLegacyCleanupOnce(){
+    try{
+      var doneKey = 'finance_legacy_cleanup_v2_done';
+      var done = DBStorage.getItem(doneKey);
+      if(done === '1') return;
+      var rep = financeCleanupLegacyStorage();
+      DBStorage.setItem(doneKey, '1');
+      try{ window.__financeLegacyCleanupReport = rep; }catch(_e){}
+    }catch(e){}
+  }
+
+  try{
+    window.FinanceAPI = window.FinanceAPI || {};
+    window.FinanceAPI.addPayment = financeAddPaymentByTz;
+    window.FinanceAPI.getStudentBalance = financeGetStudentBalanceByTz;
+    window.FinanceAPI.cleanupLegacyStorage = financeCleanupLegacyStorage;
+    window.financeAPI = window.FinanceAPI;
+  }catch(e){}
+  try{ financeRunLegacyCleanupOnce(); }catch(e){}
+
   /* ===== SCHOOL REGISTRATION (Step 3) ===== */
   (function(){
     var LS_REQ_KEY = "school_reg_requests_v1";
@@ -19683,7 +19954,7 @@ function _secGetAllStudents(){
         if(cx){ try{ cx.remove(); }catch(e){ cx.style.display='none'; } }
         try{ var x2 = ov.querySelector('.close-btn,.close-x,[data-close="x"]'); if(x2) x2.style.display='none'; }catch(e){}
         var cb = document.getElementById('secPaymentCloseBtn');
-        if(cb) cb.onclick = function(){ try{ document.body.style.overflow=''; }catch(_e){} try{ closeOverlay('secPaymentOverlay'); }catch(e){} };
+        if(cb) cb.onclick = function(){ try{ if(ov && typeof ov.__resetSecPaymentForm==='function') ov.__resetSecPaymentForm(); }catch(_e0){} try{ document.body.style.overflow=''; }catch(_e){} try{ closeOverlay('secPaymentOverlay'); }catch(e){} };
 
         function setMsg(txt){
           var m = document.getElementById('secPayMsg');
@@ -19706,6 +19977,44 @@ function _secGetAllStudents(){
             }catch(e){}
           });
         }
+
+
+function _secPayShowResultDialog(ok, msg, onApprove){
+  try{
+    var text = String(msg || (ok ? 'התשלום בוצע בהצלחה' : 'שגיאה בביצוע התשלום'));
+    alert(text);
+  }catch(e){}
+  try{ if(typeof onApprove === 'function') onApprove(); }catch(e){}
+}
+function resetSecPaymentForm(){
+  try{ setMsg(''); }catch(e){}
+  try{ setMethod(''); }catch(e){}
+  try{
+    selectedStudent = null;
+    var card = document.getElementById('secPaySelectedStudentCard');
+    var nEl = document.getElementById('secPaySelName');
+    var tEl = document.getElementById('secPaySelTz');
+    var bEl = document.getElementById('secPaySelBalance');
+    if(card) card.style.display = 'none';
+    if(nEl) nEl.textContent = '—';
+    if(tEl) tEl.textContent = 'ת״ז: —';
+    if(bEl) bEl.textContent = 'יתרה: —';
+  }catch(e){}
+  try{ var el1=document.getElementById('secPayStudentSearch'); if(el1) el1.value=''; }catch(e){}
+  try{ var el2=document.getElementById('secPayAmount'); if(el2) el2.value=''; }catch(e){}
+  try{ var el3=document.getElementById('secPayReceiptRef'); if(el3) el3.value=''; }catch(e){}
+  try{ var el4=document.getElementById('secPayNote'); if(el4) el4.value=''; }catch(e){}
+  try{
+    var rr=document.getElementById('secPaySearchResults');
+    if(rr){ rr.innerHTML=''; rr.style.display='none'; }
+  }catch(e){}
+  try{
+    var hh=document.getElementById('secPaySearchHint');
+    if(hh) hh.textContent='הקלד ת״ז מלאה (9 ספרות) כדי להציג תלמיד לבחירה';
+  }catch(e){}
+}
+        try{ ov.__resetSecPaymentForm = resetSecPaymentForm; }catch(e){}
+
 
         function isSecPayNight(){
           try{
@@ -19804,87 +20113,9 @@ function _secGetAllStudents(){
         }
 
         function _secPayResolveFinanceAPI(){
-          var existing = null;
-          try{ if(window.FinanceAPI && typeof window.FinanceAPI === 'object') existing = window.FinanceAPI; }catch(e){}
-          try{ if(!existing && window.financeAPI && typeof window.financeAPI === 'object') existing = window.financeAPI; }catch(e){}
-
-          try{
-            var canBridge = (typeof payAddReceipt === 'function') && (typeof payLsGet === 'function') && (typeof payEnsureLedger === 'function') && (typeof payLedgerSum === 'function');
-            if(!canBridge){
-              return existing;
-            }
-
-            window.FinanceAPI = existing || {};
-            window.FinanceAPI.addPayment = function(tz, amount, meta){
-              tz = String(tz||'').trim();
-              var amt = Number(amount);
-              if(!tz) throw new Error('חסר ת״ז');
-              if(!isFinite(amt) || amt <= 0) throw new Error('סכום לא תקין');
-
-              var st = null, userKey = '';
-              try{ if(typeof findStudentByTz === 'function') st = findStudentByTz(tz); }catch(e){}
-              if(st) userKey = String(st.username || st.user || st.id || st.tz || '').trim();
-              if(!userKey) userKey = tz;
-
-              var m = (meta && typeof meta === 'object') ? meta : {};
-              var note = String(m.note || 'תשלום מזכירה');
-              var receipt = payAddReceipt(userKey, amt, note, 0); // existing ledger logic only
-
-              try{
-                var keyP = (typeof payKeyStudent === 'function') ? payKeyStudent(userKey) : ('student_payments_' + userKey);
-                var payObj = payLsGet(keyP, {}) || {};
-                payEnsureLedger(payObj, userKey);
-                if(Array.isArray(payObj.ledger) && payObj.ledger.length){
-                  var e = payObj.ledger[0];
-                  if(e && e.type === 'payment'){
-                    if(!e.meta || typeof e.meta !== 'object') e.meta = {};
-                    e.meta.method = String(m.method || e.meta.method || '');
-                    e.meta.source = String(m.source || e.meta.source || 'secretary_payment');
-                    if(m.receiptRef) e.meta.receiptRef = String(m.receiptRef);
-                    if(m.createdByRole) e.meta.createdByRole = String(m.createdByRole);
-                    if(m.note) e.meta.note = String(m.note);
-                    if(typeof payLsSet === 'function') payLsSet(keyP, payObj);
-                  }
-                }
-              }catch(_e){}
-
-              return receipt;
-            };
-
-            window.FinanceAPI.getStudentBalance = function(tz){
-              tz = String(tz||'').trim();
-              if(!tz) return { balance: 0, due: 0 };
-
-              var st = null, userKey = '';
-              try{ if(typeof findStudentByTz === 'function') st = findStudentByTz(tz); }catch(e){}
-              if(st) userKey = String(st.username || st.user || st.id || st.tz || '').trim();
-              if(!userKey) userKey = tz;
-
-              try{
-                var keyP = (typeof payKeyStudent === 'function') ? payKeyStudent(userKey) : ('student_payments_' + userKey);
-                var payObj = payLsGet(keyP, null);
-                if(payObj && typeof payObj === 'object'){
-                  payEnsureLedger(payObj, userKey);
-                  var sum = Number(payLedgerSum(payObj));
-                  if(isFinite(sum)) return { balance: sum, due: sum };
-                  if(isFinite(Number(payObj.due))) return { balance: Number(payObj.due), due: Number(payObj.due) };
-                }
-              }catch(e){}
-
-              try{
-                var ckey = (typeof keyStudentCredit === 'function') ? keyStudentCredit(tz) : ('student_credit_money_' + tz);
-                var raw = (typeof DBStorage !== 'undefined' && DBStorage && typeof DBStorage.getItem === 'function') ? DBStorage.getItem(ckey) : localStorage.getItem(ckey);
-                var n = Number(String(raw==null?'':raw).replace(/,/g,''));
-                if(isFinite(n)) return { balance: n, due: n };
-              }catch(e){}
-
-              return { balance: 0, due: 0 };
-            };
-
-            return window.FinanceAPI;
-          }catch(e){
-            return existing;
-          }
+          try{ if(window.FinanceAPI && typeof window.FinanceAPI === 'object') return window.FinanceAPI; }catch(e){}
+          try{ if(window.financeAPI && typeof window.financeAPI === 'object') return window.financeAPI; }catch(e){}
+          return null;
         }
 
         function _secPayLoadBalance(tz){
@@ -20254,6 +20485,7 @@ function _secGetAllStudents(){
             };
 
             function onSaveSuccess(){
+              var _successMsg = 'התשלום בוצע בהצלחה';
               try{
                 refreshSelectedStudentBalance();
               }catch(e){}
@@ -20270,11 +20502,12 @@ function _secGetAllStudents(){
                 if(nEl2) nEl2.value = '';
               }catch(e){}
               try{ setMethod(''); }catch(e){}
-              setMsg('התשלום נשמר בהצלחה');
-              try{
-                var aFocus = document.getElementById('secPayAmount');
-                if(aFocus && aFocus.focus) aFocus.focus();
-              }catch(e){}
+              setMsg(_successMsg);
+              _secPayShowResultDialog(true, _successMsg, function(){
+                try{ if(ov && typeof ov.__resetSecPaymentForm==='function') ov.__resetSecPaymentForm(); }catch(_e0){}
+                try{ document.body.style.overflow=''; }catch(_e){}
+                try{ closeOverlay('secPaymentOverlay'); }catch(_e){}
+              });
             }
             function onSaveError(err){
               try{ console.warn('Secretary payment save failed', err); }catch(e){}
@@ -20282,7 +20515,9 @@ function _secGetAllStudents(){
               try{
                 msg = (err && (err.userMessage || err.message)) ? String(err.userMessage || err.message) : '';
               }catch(e){}
-              setMsg(msg ? ('שגיאה בשמירת תשלום: ' + msg) : 'שגיאה בשמירת תשלום');
+              var finalMsg = msg ? ('שגיאה בשמירת תשלום: ' + msg) : 'שגיאה בשמירת תשלום';
+              setMsg(finalMsg);
+              _secPayShowResultDialog(false, finalMsg, function(){});
             }
 
             try{
@@ -20308,12 +20543,13 @@ function _secGetAllStudents(){
         ov.addEventListener('click', function(ev){
           try{
             var m = document.getElementById('secPaymentModal');
-            if(m && ev && ev.target && !m.contains(ev.target)){ try{ document.body.style.overflow=''; }catch(_e){} closeOverlay('secPaymentOverlay'); }
+            if(m && ev && ev.target && !m.contains(ev.target)){ try{ if(ov && typeof ov.__resetSecPaymentForm==='function') ov.__resetSecPaymentForm(); }catch(_e0){} try{ document.body.style.overflow=''; }catch(_e){} closeOverlay('secPaymentOverlay'); }
           }catch(e){}
         });
       }
       try{
         var msg = document.getElementById('secPayMsg'); if(msg){ msg.textContent=''; msg.style.visibility='hidden'; }
+        try{ if(ov && typeof ov.__resetSecPaymentForm==='function') ov.__resetSecPaymentForm(); else if(typeof resetSecPaymentForm==='function') resetSecPaymentForm(); }catch(_e){}
         try{ applySecPaymentTheme(); }catch(_e){}
         openOverlay('secPaymentOverlay');
         try{
