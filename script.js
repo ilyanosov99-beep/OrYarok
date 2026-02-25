@@ -6687,6 +6687,7 @@ closeAuth();
       setTimeout(function(){
         try{ closeProfileMenu(); }catch(e){}
         try{ if(typeof window.closeMenu === 'function') window.closeMenu(); }catch(e){}
+      try{ if(typeof window.closeProfileMenu === 'function') window.closeProfileMenu(); }catch(e){}
         try{ openPage(target); }catch(e){}
         try{
           if(window.__afterLoginOpenPayLesson){
@@ -12565,10 +12566,8 @@ try{ window.__MGR_EDIT_ORIG_ID = ""; }catch(e){}
     resEl.innerHTML = html;
   }
 
-function renderSecretaryStudentResults(q){
+function secretaryFindStudents(q){
     q = normStr(q).toLowerCase();
-    var resEl = $("secStudentResults");
-    if(!resEl) return;
 
     // collect tz candidates (same sources as manager)
     var tzs = {};
@@ -12616,6 +12615,16 @@ function renderSecretaryStudentResults(q){
       if(an) return an;
       return (a.tz||"").localeCompare(b.tz||"");
     });
+
+    return items;
+  }
+  try{ window.secretaryFindStudents = secretaryFindStudents; }catch(e){}
+
+function renderSecretaryStudentResults(q){
+    var resEl = $("secStudentResults");
+    if(!resEl) return;
+
+    var items = secretaryFindStudents(q);
 
     if(!items.length){
       resEl.innerHTML = '<div class="shop-mini" style="text-align:center;opacity:.9;">אין תוצאות</div>';
@@ -15162,6 +15171,8 @@ function shopSetQty(id, delta){
       ov.setAttribute('aria-hidden','false');
       if(!ov.__shopBind){
         ov.__shopBind = true;
+        try{ applySecPaymentTheme(); }catch(e){}
+
         ov.addEventListener('click', function(ev){
           if(ev.target === ov){ closeShopCart(false); }
         });
@@ -18824,6 +18835,8 @@ window.enableSecretaryMode = function(persist){
   window.openSecretaryTestOrders = function(){
     try{
       if(!_secIsOn()) return;
+      try{ if(typeof window.closeMenu === 'function') window.closeMenu(); }catch(e){}
+      try{ if(typeof window.closeProfileMenu === 'function') window.closeProfileMenu(); }catch(e){}
 
       function escHtml(v){
         try{ return String(v==null?'':v).replace(/[&<>\"']/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]); }); }catch(e){ return ''; }
@@ -18903,7 +18916,7 @@ window.enableSecretaryMode = function(persist){
         ov = document.createElement('div');
         ov.id = 'secTestOrdersOverlay';
         ov.className = 'overlay';
-        ov.style.zIndex = '2400';
+        ov.style.zIndex = '99999';
         ov.innerHTML = [
           '<div class="pay-modal" id="secTestsRootModal" style="width:min(980px,96vw);max-width:96vw;max-height:90vh;overflow:auto;position:relative;">',
             '<button type="button" class="pay-close-x" id="secTestOrdersCloseX" aria-label="סגור">×</button>',
@@ -18913,6 +18926,8 @@ window.enableSecretaryMode = function(persist){
         document.body.appendChild(ov);
         const closeBtn = document.getElementById('secTestOrdersCloseX');
         if(closeBtn) closeBtn.onclick = function(){ try{ closeOverlay('secTestOrdersOverlay'); }catch(e){} };
+        try{ applySecPaymentTheme(); }catch(e){}
+
         ov.addEventListener('click', function(ev){
           try{
             var modal = document.getElementById('secTestsRootModal');
@@ -19101,6 +19116,7 @@ window.enableSecretaryMode = function(persist){
         btn.onclick = function(){
           try{ var dm = document.getElementById('secFutureDayModal'); if(dm){ dm.remove(); return; } }catch(e){}
           try{ var sdet = document.getElementById('secShopDetailModal'); if(sdet){ sdet.remove(); return; } }catch(e){}
+          try{ if(typeof closeOverlay === 'function') closeOverlay('secPaymentOverlay'); }catch(e){}
           try{ if(typeof closeOverlay === 'function') closeOverlay('secShopOverlay'); }catch(e){}
           try{ if(typeof closeOverlay === 'function') closeOverlay('secTestOrdersOverlay'); }catch(e){}
         };
@@ -19117,11 +19133,17 @@ window.enableSecretaryMode = function(persist){
   }
   window.openSecretaryMail = function(){
     if(!_secIsOn()) return;
+    try{ if(typeof window.closeMenu === 'function') window.closeMenu(); }catch(e){}
+    try{ if(typeof window.closeProfileMenu === 'function') window.closeProfileMenu(); }catch(e){}
+    
     try{ _secEnsureComposeInit(); }catch(e){}
     try{ if(typeof window.openOverlay === 'function') window.openOverlay('secMailOverlay'); }catch(e){}
   };
   window.openSecretaryInbox = function(){
     if(!_secIsOn()) return;
+    try{ if(typeof window.closeMenu === 'function') window.closeMenu(); }catch(e){}
+    try{ if(typeof window.closeProfileMenu === 'function') window.closeProfileMenu(); }catch(e){}
+    
     try{ _secEnsureComposeInit(); }catch(e){}
     try{ window.closeOverlay && window.closeOverlay('secMailOverlay'); }catch(e){}
     try{ renderSecretaryInbox(); }catch(e){}
@@ -19129,6 +19151,9 @@ window.enableSecretaryMode = function(persist){
   };
   window.openSecretaryCompose = function(){
     if(!_secIsOn()) return;
+    try{ if(typeof window.closeMenu === 'function') window.closeMenu(); }catch(e){}
+    try{ if(typeof window.closeProfileMenu === 'function') window.closeProfileMenu(); }catch(e){}
+    
     try{ _secEnsureComposeInit(); }catch(e){}
     try{ window.closeOverlay && window.closeOverlay('secMailOverlay'); }catch(e){}
     try{
@@ -19578,8 +19603,740 @@ function _secGetAllStudents(){
 
 
   // Secretary Shop UI (pickup / orders / waiting)
+  // Secretary: open payment window (stage 3 UI shell only, no save logic yet)
+  window.openSecretaryPaymentPage = function(){
+    try{
+      if(!_secIsOn()) return;
+      try{ if(typeof window.closeMenu === 'function') window.closeMenu(); }catch(e){}
+      try{ if(typeof window.closeProfileMenu === 'function') window.closeProfileMenu(); }catch(e){}
+
+      var ov = document.getElementById('secPaymentOverlay');
+      if(!ov){
+        ov = document.createElement('div');
+        ov.id = 'secPaymentOverlay';
+        ov.className = 'overlay';
+        ov.style.zIndex = '99999';
+        ov.innerHTML = [
+          '<div class="pay-modal" id="secPaymentModal" style="width:min(760px,95vw);max-width:95vw;position:relative;max-height:calc(100dvh - 18px);overflow:auto;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;padding-bottom:calc(env(safe-area-inset-bottom,0px) + 220px);">',
+            '<div class="pay-title" style="margin-bottom:4px;">תשלום</div>',
+            '<div class="pay-sub" dir="rtl" style="text-align:right;margin-bottom:12px;">תשלום מזכירה</div>',
+
+            '<div id="secPayMsg" dir="rtl" style="visibility:hidden;min-height:0;margin:0 0 10px;padding:10px 12px;border-radius:10px;border:1px solid rgba(255,255,255,.12);background:rgba(255,255,255,.03);text-align:right;"></div>',
+
+            '<div dir="rtl" style="display:grid;gap:12px;text-align:right;">',
+
+              '<div style="border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:12px;background:rgba(255,255,255,.02);">',
+                '<div style="font-weight:800;margin-bottom:8px;">חיפוש תלמיד</div>',
+                '<div id="secPaySearchWrap" style="position:relative;">',
+                  '<input id="secPayStudentSearch" name="sec_pay_student_search_'+String(Date.now())+'" type="tel" inputmode="numeric" enterkeyhint="done" maxlength="9" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false" aria-autocomplete="none" data-lpignore="true" data-form-type="other" placeholder="הקלד ת״ז מלאה (9 ספרות)" style="width:100%;min-height:42px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:#fff;padding:0 12px;box-sizing:border-box;" />',
+                  '<div id="secPaySearchResults" style="display:none;margin-top:6px;position:relative;z-index:9;"></div>',
+                '</div>',
+                '<div id="secPaySearchHint" style="margin-top:8px;color:#cfcfcf;font-size:12px;opacity:.9;">הקלד ת״ז מלאה (9 ספרות) כדי להציג תלמיד לבחירה</div>',
+              '</div>',
+
+              '<div id="secPaySelectedStudentCard" style="border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:12px;background:rgba(255,255,255,.02);display:none;">',
+                '<div style="font-weight:800;margin-bottom:8px;">תלמיד נבחר</div>',
+                '<div style="display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;">',
+                  '<div>',
+                    '<div id="secPaySelName" style="font-weight:700;">—</div>',
+                    '<div id="secPaySelTz" style="font-size:12px;color:#cfcfcf;">ת״ז: —</div>',
+                  '</div>',
+                  '<div id="secPaySelBalance" style="font-weight:800;white-space:nowrap;">יתרה: —</div>',
+                '</div>',
+              '</div>',
+
+              '<div style="border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:12px;background:rgba(255,255,255,.02);">',
+                '<div style="font-weight:800;margin-bottom:8px;">סכום לתשלום</div>',
+                '<input id="secPayAmount" type="number" inputmode="decimal" min="0" step="0.01" placeholder="0" style="width:100%;min-height:42px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:#fff;padding:0 12px;box-sizing:border-box;" />',
+              '</div>',
+
+              '<div style="border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:12px;background:rgba(255,255,255,.02);">',
+                '<div style="font-weight:800;margin-bottom:8px;">אמצעי תשלום</div>',
+                '<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">',
+                  '<button type="button" id="secPayMethodCash" data-method="cash" class="pay-btn" style="min-height:42px;">מזומן</button>',
+                  '<button type="button" id="secPayMethodCredit" data-method="credit" class="pay-btn" style="min-height:42px;">אשראי</button>',
+                '</div>',
+                '<input type="hidden" id="secPayMethod" value="" />',
+              '</div>',
+
+              '<div style="border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:12px;background:rgba(255,255,255,.02);">',
+                '<div style="font-weight:800;margin-bottom:8px;">אסמכתא / קבלה <span style="opacity:.7;font-weight:500;">(אופציונלי)</span></div>',
+                '<input id="secPayReceiptRef" type="text" autocomplete="off" placeholder="מספר אסמכתא / קבלה" style="width:100%;min-height:42px;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:#fff;padding:0 12px;box-sizing:border-box;" />',
+              '</div>',
+
+              '<div style="border:1px solid rgba(255,255,255,.08);border-radius:14px;padding:12px;background:rgba(255,255,255,.02);">',
+                '<div style="font-weight:800;margin-bottom:8px;">הערה <span style="opacity:.7;font-weight:500;">(אופציונלי)</span></div>',
+                '<textarea id="secPayNote" rows="3" placeholder="הערה לתשלום" style="width:100%;border-radius:10px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.04);color:#fff;padding:10px 12px;box-sizing:border-box;resize:vertical;"></textarea>',
+              '</div>',
+
+              '<div style="display:flex;gap:8px;justify-content:flex-start;flex-wrap:wrap;position:sticky;bottom:0;z-index:5;padding-top:8px;background:linear-gradient(to top, rgba(7,17,16,.95), rgba(7,17,16,0));">',
+                '<button type="button" class="pay-btn primary" id="secPaymentSaveBtn">שמור תשלום</button>',
+                '<button type="button" class="pay-btn" id="secPaymentCloseBtn">חזרה</button>',
+              '</div>',
+
+            '</div>',
+          '</div>'
+        ].join('');
+        document.body.appendChild(ov);
+
+        var cx = document.getElementById('secPaymentCloseX');
+        if(cx){ try{ cx.remove(); }catch(e){ cx.style.display='none'; } }
+        try{ var x2 = ov.querySelector('.close-btn,.close-x,[data-close="x"]'); if(x2) x2.style.display='none'; }catch(e){}
+        var cb = document.getElementById('secPaymentCloseBtn');
+        if(cb) cb.onclick = function(){ try{ document.body.style.overflow=''; }catch(_e){} try{ closeOverlay('secPaymentOverlay'); }catch(e){} };
+
+        function setMsg(txt){
+          var m = document.getElementById('secPayMsg');
+          if(!m) return;
+          txt = String(txt||'').trim();
+          m.textContent = txt;
+          m.style.visibility = txt ? 'visible' : 'hidden';
+        }
+        function setMethod(method){
+          var hidden = document.getElementById('secPayMethod');
+          var b1 = document.getElementById('secPayMethodCash');
+          var b2 = document.getElementById('secPayMethodCredit');
+          if(hidden) hidden.value = method || '';
+          [b1,b2].forEach(function(b){
+            if(!b) return;
+            var on = (String(b.getAttribute('data-method')||'') === String(method||''));
+            try{
+              b.style.outline = on ? '2px solid rgba(80,220,140,.9)' : '';
+              b.style.background = on ? 'rgba(80,220,140,.12)' : '';
+            }catch(e){}
+          });
+        }
+
+        function isSecPayNight(){
+          try{
+            var b = document.body;
+            if(!b) return true;
+            if(b.classList.contains('theme-day')) return false;
+            if(b.classList.contains('theme-night')) return true;
+            return true;
+          }catch(e){ return true; }
+        }
+        function applySecPaymentTheme(){
+          try{
+            var night = isSecPayNight();
+            var modal = document.getElementById('secPaymentModal');
+            if(!modal) return;
+            modal.style.background = night ? '#071110' : '#ffffff';
+            modal.style.color = night ? '#ffffff' : '#0f1414';
+            modal.style.border = '1px solid ' + (night ? 'rgba(255,255,255,.10)' : 'rgba(0,0,0,.08)');
+            modal.style.boxShadow = night ? '0 18px 48px rgba(0,0,0,.45)' : '0 18px 48px rgba(0,0,0,.18)';
+            var cards = modal.querySelectorAll('[style*="border:1px solid"]');
+            cards.forEach(function(el){
+              var id = el.id || '';
+              if(id === 'secPayMsg') return;
+              el.style.borderColor = night ? 'rgba(255,255,255,.10)' : 'rgba(0,0,0,.08)';
+              el.style.background = night ? 'rgba(255,255,255,.02)' : '#f7faf9';
+              if(!el.style.color) el.style.color = night ? '#fff' : '#0f1414';
+            });
+            var msg = document.getElementById('secPayMsg');
+            if(msg){
+              msg.style.borderColor = night ? 'rgba(255,255,255,.12)' : 'rgba(0,0,0,.10)';
+              msg.style.background = night ? 'rgba(255,255,255,.04)' : 'rgba(0,0,0,.03)';
+              msg.style.color = night ? '#fff' : '#0f1414';
+            }
+            var inputs = modal.querySelectorAll('input, textarea');
+            inputs.forEach(function(el){
+              if(el.type === 'hidden') return;
+              el.style.background = night ? 'rgba(255,255,255,.04)' : '#ffffff';
+              el.style.color = night ? '#ffffff' : '#0f1414';
+              el.style.borderColor = night ? 'rgba(255,255,255,.14)' : 'rgba(0,0,0,.14)';
+              el.style.caretColor = night ? '#ffffff' : '#0f1414';
+            });
+            var subtle = modal.querySelectorAll('[style*="color:#cfcfcf"]');
+            subtle.forEach(function(el){ el.style.color = night ? '#cfcfcf' : '#5b6464'; });
+            try{
+              var actRows = modal.querySelectorAll('[style*="position:sticky"][style*="bottom:0"]');
+              actRows.forEach(function(el){
+                el.style.background = night
+                  ? 'linear-gradient(to top, rgba(7,17,16,.95), rgba(7,17,16,0))'
+                  : 'linear-gradient(to top, rgba(255,255,255,.96), rgba(255,255,255,0))';
+              });
+            }catch(e){}
+            var results = document.getElementById('secPaySearchResults');
+            if(results){
+              results.style.color = night ? '#fff' : '#0f1414';
+              results.style.background = 'transparent';
+            }
+          }catch(e){}
+        }
+
+        var mCash = document.getElementById('secPayMethodCash');
+        var mCredit = document.getElementById('secPayMethodCredit');
+        if(mCash) mCash.onclick = function(){ try{ if(document.activeElement && document.activeElement.blur) document.activeElement.blur(); }catch(e){} setMethod('cash'); };
+        if(mCredit) mCredit.onclick = function(){ try{ if(document.activeElement && document.activeElement.blur) document.activeElement.blur(); }catch(e){} setMethod('credit'); };
+
+        var selectedStudent = null;
+        function _secPayDigitsOnly(v){ try{ return String(v==null?'':v).replace(/\D+/g,''); }catch(e){ return ''; } }
+        function _secPayEsc(v){ try{ return String(v==null?'':v).replace(/[&<>\"']/g,function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]); }); }catch(e){ return ''; } }
+        function _secPayNormTz(v){
+          try{ if(typeof normalizeTz === 'function') return String(normalizeTz(v)||''); }catch(e){}
+          return _secPayDigitsOnly(v).slice(0,9);
+        }
+        function _secPayFmtMoney(v){
+          try{
+            if(v == null || v === '') return '—';
+            var n = Number(v);
+            if(!isFinite(n)) return '—';
+            return n.toLocaleString('he-IL') + '₪';
+          }catch(e){ return '—'; }
+        }
+        function _secPayExtractBalance(raw){
+          try{
+            if(raw == null) return null;
+            if(typeof raw === 'number') return isFinite(raw) ? raw : null;
+            if(typeof raw === 'string'){ var n1 = Number(String(raw).replace(/,/g,'')); return isFinite(n1) ? n1 : null; }
+            if(typeof raw === 'object'){
+              var keys = ['balance','currentBalance','studentBalance','amount','value','total','available','due','paymentsDue'];
+              for(var i=0;i<keys.length;i++){
+                if(Object.prototype.hasOwnProperty.call(raw, keys[i])){
+                  var n2 = Number(String(raw[keys[i]]).replace(/,/g,''));
+                  if(isFinite(n2)) return n2;
+                }
+              }
+            }
+          }catch(e){}
+          return null;
+        }
+
+        function _secPayResolveFinanceAPI(){
+          var existing = null;
+          try{ if(window.FinanceAPI && typeof window.FinanceAPI === 'object') existing = window.FinanceAPI; }catch(e){}
+          try{ if(!existing && window.financeAPI && typeof window.financeAPI === 'object') existing = window.financeAPI; }catch(e){}
+
+          try{
+            var canBridge = (typeof payAddReceipt === 'function') && (typeof payLsGet === 'function') && (typeof payEnsureLedger === 'function') && (typeof payLedgerSum === 'function');
+            if(!canBridge){
+              return existing;
+            }
+
+            window.FinanceAPI = existing || {};
+            window.FinanceAPI.addPayment = function(tz, amount, meta){
+              tz = String(tz||'').trim();
+              var amt = Number(amount);
+              if(!tz) throw new Error('חסר ת״ז');
+              if(!isFinite(amt) || amt <= 0) throw new Error('סכום לא תקין');
+
+              var st = null, userKey = '';
+              try{ if(typeof findStudentByTz === 'function') st = findStudentByTz(tz); }catch(e){}
+              if(st) userKey = String(st.username || st.user || st.id || st.tz || '').trim();
+              if(!userKey) userKey = tz;
+
+              var m = (meta && typeof meta === 'object') ? meta : {};
+              var note = String(m.note || 'תשלום מזכירה');
+              var receipt = payAddReceipt(userKey, amt, note, 0); // existing ledger logic only
+
+              try{
+                var keyP = (typeof payKeyStudent === 'function') ? payKeyStudent(userKey) : ('student_payments_' + userKey);
+                var payObj = payLsGet(keyP, {}) || {};
+                payEnsureLedger(payObj, userKey);
+                if(Array.isArray(payObj.ledger) && payObj.ledger.length){
+                  var e = payObj.ledger[0];
+                  if(e && e.type === 'payment'){
+                    if(!e.meta || typeof e.meta !== 'object') e.meta = {};
+                    e.meta.method = String(m.method || e.meta.method || '');
+                    e.meta.source = String(m.source || e.meta.source || 'secretary_payment');
+                    if(m.receiptRef) e.meta.receiptRef = String(m.receiptRef);
+                    if(m.createdByRole) e.meta.createdByRole = String(m.createdByRole);
+                    if(m.note) e.meta.note = String(m.note);
+                    if(typeof payLsSet === 'function') payLsSet(keyP, payObj);
+                  }
+                }
+              }catch(_e){}
+
+              return receipt;
+            };
+
+            window.FinanceAPI.getStudentBalance = function(tz){
+              tz = String(tz||'').trim();
+              if(!tz) return { balance: 0, due: 0 };
+
+              var st = null, userKey = '';
+              try{ if(typeof findStudentByTz === 'function') st = findStudentByTz(tz); }catch(e){}
+              if(st) userKey = String(st.username || st.user || st.id || st.tz || '').trim();
+              if(!userKey) userKey = tz;
+
+              try{
+                var keyP = (typeof payKeyStudent === 'function') ? payKeyStudent(userKey) : ('student_payments_' + userKey);
+                var payObj = payLsGet(keyP, null);
+                if(payObj && typeof payObj === 'object'){
+                  payEnsureLedger(payObj, userKey);
+                  var sum = Number(payLedgerSum(payObj));
+                  if(isFinite(sum)) return { balance: sum, due: sum };
+                  if(isFinite(Number(payObj.due))) return { balance: Number(payObj.due), due: Number(payObj.due) };
+                }
+              }catch(e){}
+
+              try{
+                var ckey = (typeof keyStudentCredit === 'function') ? keyStudentCredit(tz) : ('student_credit_money_' + tz);
+                var raw = (typeof DBStorage !== 'undefined' && DBStorage && typeof DBStorage.getItem === 'function') ? DBStorage.getItem(ckey) : localStorage.getItem(ckey);
+                var n = Number(String(raw==null?'':raw).replace(/,/g,''));
+                if(isFinite(n)) return { balance: n, due: n };
+              }catch(e){}
+
+              return { balance: 0, due: 0 };
+            };
+
+            return window.FinanceAPI;
+          }catch(e){
+            return existing;
+          }
+        }
+
+        function _secPayLoadBalance(tz){
+          try{
+            if(!tz) return null;
+            var api = _secPayResolveFinanceAPI();
+            if(api && typeof api.getStudentBalance === 'function'){
+              return api.getStudentBalance(tz);
+            }
+          }catch(e){}
+          return null;
+        }
+        function refreshSelectedStudentBalance(){
+          var bEl = document.getElementById('secPaySelBalance');
+          if(!bEl) return;
+          if(!selectedStudent || !selectedStudent.tz){
+            bEl.textContent = 'יתרה: —';
+            return;
+          }
+          bEl.textContent = 'יתרה: טוען...';
+          try{
+            var bal = _secPayLoadBalance(String(selectedStudent.tz || ''));
+            if(bal && typeof bal.then === 'function'){
+              bal.then(function(v){
+                try{
+                  if(!selectedStudent || !selectedStudent.tz) return;
+                  bEl.textContent = 'יתרה: ' + _secPayFmtMoney(_secPayExtractBalance(v));
+                }catch(_e){}
+              }).catch(function(){
+                try{ bEl.textContent = 'יתרה: שגיאה בטעינה'; }catch(_e){}
+              });
+              return;
+            }
+            bEl.textContent = 'יתרה: ' + _secPayFmtMoney(_secPayExtractBalance(bal));
+          }catch(e){
+            bEl.textContent = 'יתרה: שגיאה בטעינה';
+          }
+        }
+        function setSelectedStudent(st){
+          selectedStudent = st || null;
+          var card = document.getElementById('secPaySelectedStudentCard');
+          var nEl = document.getElementById('secPaySelName');
+          var tEl = document.getElementById('secPaySelTz');
+          var bEl = document.getElementById('secPaySelBalance');
+          if(!selectedStudent){
+            if(card) card.style.display = 'none';
+            if(nEl) nEl.textContent = '—';
+            if(tEl) tEl.textContent = 'ת״ז: —';
+            if(bEl) bEl.textContent = 'יתרה: —';
+            return;
+          }
+          if(card) card.style.display = 'block';
+          if(nEl) nEl.textContent = String(selectedStudent.name || '—');
+          if(tEl) tEl.textContent = 'ת״ז: ' + String(selectedStudent.tz || '—');
+          if(bEl) bEl.textContent = 'יתרה: טוען...';
+          refreshSelectedStudentBalance();
+          setMsg('נבחר תלמיד: ' + String(selectedStudent.name || selectedStudent.tz || ''));
+        }
+
+        function _secPaySearchThemeVals(){
+          var night = true;
+          try{ night = isSecPayNight(); }catch(e){}
+          return {
+            night: night,
+            itemBorder: night ? 'rgba(255,255,255,.08)' : 'rgba(0,0,0,.10)',
+            itemBg: night ? 'rgba(255,255,255,.03)' : '#ffffff',
+            itemText: night ? '#ffffff' : '#0f1414',
+            subText: night ? '#cfcfcf' : '#5b6464',
+            emptyBorder: night ? 'rgba(255,255,255,.14)' : 'rgba(0,0,0,.14)',
+            emptyBg: night ? 'rgba(255,255,255,.02)' : '#ffffff'
+          };
+        }
+
+
+        function renderPaySearchResults(q){
+          try{
+          var res = document.getElementById('secPaySearchResults');
+          var hint = document.getElementById('secPaySearchHint');
+          if(!res) return;
+          var rawQuery = String(q || '');
+          var query = rawQuery.trim();
+          var qNorm = _secPayNormTz(query);
+
+          // show results only after full TZ (9 digits)
+          if(!qNorm || qNorm.length < 9){
+            res.style.display = 'none';
+            res.innerHTML = '';
+            if(hint) hint.textContent = query ? 'יש להקליד ת״ז מלאה (9 ספרות)' : 'הקלד ת״ז מלאה (9 ספרות) כדי להציג תלמיד לבחירה';
+            return;
+          }
+
+          var items = [];
+          try{
+            if(typeof window.secretaryFindStudents === 'function') items = window.secretaryFindStudents(qNorm) || [];
+            else { if(hint) hint.textContent = 'פונקציית חיפוש מזכירה לא זמינה'; }
+          }catch(e){ items = []; }
+
+          // Direct 1:1 reuse of secretary home search source/function (no fallback source path)
+          items = (Array.isArray(items) ? items : []).filter(function(it){
+            return _secPayNormTz(String((it||{}).tz||'')) === qNorm;
+          }).slice(0, 5);
+
+          if(hint) hint.textContent = items.length ? 'נמצאה התאמה. לחץ לבחור תלמיד' : 'לא נמצאה התאמה לת״ז הזו';
+
+          res.style.display = 'block';
+          res.style.maxHeight = '240px';
+          res.style.overflow = 'auto';
+          res.style.padding = '6px';
+          res.style.borderRadius = '12px';
+          var __th0 = _secPaySearchThemeVals();
+          res.style.border = '1px solid ' + (__th0.night ? 'rgba(255,255,255,.12)' : 'rgba(0,0,0,.12)');
+          res.style.background = __th0.night ? '#0b1514' : '#ffffff';
+          res.style.boxShadow = __th0.night ? '0 10px 28px rgba(0,0,0,.35)' : '0 8px 22px rgba(0,0,0,.12)';
+          res.style.zIndex = '50';
+
+          var th = _secPaySearchThemeVals();
+          if(!items.length){
+            res.innerHTML = '<div style="border:1px dashed '+th.emptyBorder+';border-radius:10px;padding:10px;background:'+th.emptyBg+';color:'+th.subText+';font-size:12px;">אין תלמיד תואם לת״ז מלאה</div>';
+            return;
+          }
+
+          res.innerHTML = items.map(function(it, idx){
+            var tzv = _secPayNormTz(String(it.tz || ''));
+            return '' +
+              '<button type="button" data-act="secPayPickStu" data-tz="'+_secPayEsc(tzv)+'" style="width:100%;text-align:right;display:flex;justify-content:space-between;gap:10px;align-items:flex-start;padding:10px 12px;margin:0 0 6px;border-radius:10px;border:1px solid '+th.itemBorder+';background:'+th.itemBg+';color:'+th.itemText+';cursor:pointer;">' +
+                '<span style="display:block;min-width:0;flex:1;">' +
+                  '<span style="display:block;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">'+_secPayEsc(it.name||('תלמיד ' + tzv))+'</span>' +
+                  '<span style="display:block;font-size:12px;color:'+th.subText+';">ת״ז: '+_secPayEsc(tzv)+'</span>' +
+                  '<span data-sec-pay-bal="'+_secPayEsc(tzv)+'" style="display:block;font-size:12px;color:'+th.subText+';">יתרה: טוען...</span>' +
+                '</span>' +
+                '<span style="font-size:12px;opacity:.9;white-space:nowrap;margin-top:2px;">בחר</span>' +
+              '</button>';
+          }).join('');
+
+          // enrich visible balances (small list only)
+          items.forEach(function(it){
+            var tzv = _secPayNormTz(String((it||{}).tz||''));
+            try{
+              var out = _secPayLoadBalance(tzv);
+              var applyBal = function(v){
+                try{
+                  var el = res.querySelector('[data-sec-pay-bal="'+CSS.escape(tzv)+'"]');
+                  if(el) el.textContent = 'יתרה: ' + _secPayFmtMoney(_secPayExtractBalance(v));
+                }catch(e){
+                  try{
+                    var nodes = res.querySelectorAll('[data-sec-pay-bal]');
+                    for(var ii=0; ii<nodes.length; ii++){
+                      if(String(nodes[ii].getAttribute('data-sec-pay-bal')||'') === tzv){
+                        nodes[ii].textContent = 'יתרה: ' + _secPayFmtMoney(_secPayExtractBalance(v));
+                        break;
+                      }
+                    }
+                  }catch(_e){}
+                }
+              };
+              if(out && typeof out.then === 'function') out.then(applyBal).catch(function(){});
+              else applyBal(out);
+            }catch(e){}
+          });
+          }catch(err){
+            try{
+              var res2 = document.getElementById('secPaySearchResults');
+              var hint2 = document.getElementById('secPaySearchHint');
+              if(hint2) hint2.textContent = 'שגיאת חיפוש תלמיד (ראה קונסול)';
+              if(res2){ res2.style.display='none'; res2.innerHTML=''; }
+              console.warn('sec payment search render failed', err);
+            }catch(_e){}
+          }
+        }
+
+        var searchInput = document.getElementById('secPayStudentSearch');
+        try{ var _sw=document.getElementById('secPaySearchWrap'); if(_sw){ _sw.style.overflow='visible'; if(_sw.parentElement) _sw.parentElement.style.overflow='visible'; } }catch(e){}
+        if(searchInput){
+          try{
+            searchInput.setAttribute('autocomplete','off');
+            searchInput.setAttribute('autocorrect','off');
+            searchInput.setAttribute('autocapitalize','none');
+            searchInput.setAttribute('spellcheck','false');
+            searchInput.setAttribute('inputmode','numeric');
+            searchInput.setAttribute('enterkeyhint','done');
+            searchInput.setAttribute('maxlength','9');
+          }catch(e){}
+          // Keep input plain; avoid "helper popup" by blocking app-level focus hooks on this modal (see modal trap below)
+          searchInput.addEventListener('input', function(){
+            try{
+              var onlyDigits = _secPayNormTz(searchInput.value || '');
+              if(String(searchInput.value||'') !== onlyDigits) searchInput.value = onlyDigits;
+            }catch(e){}
+            renderPaySearchResults(searchInput.value || '');
+          });
+          searchInput.addEventListener('focus', function(){
+            try{ setMsg(''); }catch(e){}
+            try{ searchInput.setSelectionRange && searchInput.setSelectionRange(String(searchInput.value||'').length, String(searchInput.value||'').length); }catch(e){}
+            var v = String(searchInput.value || '').trim();
+            if(v) renderPaySearchResults(v);
+          });
+          searchInput.addEventListener('blur', function(){
+            setTimeout(function(){
+              try{
+                var rr = document.getElementById('secPaySearchResults');
+                var qv = _secPayNormTz(String(searchInput && searchInput.value || ''));
+                // keep dropdown visible for full TZ so user can tap selection
+                if(rr && qv.length < 9) rr.style.display = 'none';
+              }catch(e){}
+            }, 320);
+          });
+          searchInput.addEventListener('keyup', function(){
+            renderPaySearchResults(searchInput.value || '');
+          });
+        }
+        var searchRes = document.getElementById('secPaySearchResults');
+        if(searchRes && !searchRes.__secPayTouchBound){
+          searchRes.__secPayTouchBound = true;
+          searchRes.addEventListener('pointerdown', function(ev){
+            try{
+              var t = ev.target;
+              for(var i=0;i<6 && t && t !== searchRes;i++){
+                if(t.getAttribute && t.getAttribute('data-act') === 'secPayPickStu'){
+                  ev.preventDefault();
+                  ev.stopPropagation();
+                  // trigger same picker path immediately (before input blur hides list)
+                  if(typeof t.click === 'function') t.click();
+                  return;
+                }
+                t = t.parentElement;
+              }
+            }catch(e){}
+          }, true);
+        }
+        if(searchRes && !searchRes.__secPayBound){
+          searchRes.__secPayBound = true;
+          searchRes.addEventListener('click', function(ev){
+            var t = ev.target;
+            for(var i=0;i<6 && t && t !== searchRes;i++){
+              if(t.getAttribute){
+                var act = t.getAttribute('data-act');
+                if(act === 'secPayPickStu'){
+                  try{ ev.preventDefault(); ev.stopPropagation(); }catch(_e){}
+                  var tz = String(t.getAttribute('data-tz') || '').trim();
+                  var list = [];
+                  var found = null;
+                  var qPick = _secPayNormTz(tz);
+                  try{
+                    if(typeof window.secretaryFindStudents === 'function'){
+                      // same source as secretary home search
+                      list = window.secretaryFindStudents(qPick) || [];
+                      if(!Array.isArray(list) || !list.length) list = window.secretaryFindStudents('') || [];
+                    }
+                  }catch(e){ list = []; }
+                  for(var j=0;j<list.length;j++){
+                    if(_secPayNormTz(String((list[j]||{}).tz||'')) === qPick){ found = list[j]; break; }
+                  }
+                  if(!found) return;
+                  setSelectedStudent(found);
+                  if(searchInput) searchInput.value = String(_secPayNormTz(found.tz || found.id || '') || found.tz || '');
+                  try{ if(searchInput && searchInput.blur) searchInput.blur(); }catch(e){}
+                  try{ if(document.activeElement && document.activeElement.blur) document.activeElement.blur(); }catch(e){}
+                  try{
+                    var modal2 = document.getElementById('secPaymentModal');
+                    var amt2 = document.getElementById('secPayAmount');
+                    if(modal2 && amt2 && amt2.scrollIntoView) amt2.scrollIntoView({block:'center', behavior:'smooth'});
+                  }catch(e){}
+                  searchRes.style.display = 'none';
+                  return;
+                }
+              }
+              t = t.parentElement;
+            }
+          });
+        }
+
+        try{
+          ['secPayReceiptRef','secPayNote','secPayAmount'].forEach(function(id){
+            var el = document.getElementById(id);
+            if(!el) return;
+            el.setAttribute('autocomplete','off');
+            el.setAttribute('autocorrect','off');
+            el.setAttribute('autocapitalize','none');
+            el.setAttribute('spellcheck','false');
+          });
+        }catch(e){}
+        try{
+          var secModalTrap = document.getElementById('secPaymentModal');
+          if(secModalTrap && !secModalTrap.__secPayFocusTrapBound){
+            secModalTrap.__secPayFocusTrapBound = true;
+            ['focusin','focus','click'].forEach(function(evtName){
+              secModalTrap.addEventListener(evtName, function(ev){
+                try{
+                  var t = ev && ev.target;
+                  if(!t) return;
+                  var tag = String(t.tagName||'').toLowerCase();
+                  if(tag === 'input' || tag === 'textarea'){
+                    // stop app-wide input helper overlays from this screen
+                    if(ev.stopImmediatePropagation) ev.stopImmediatePropagation();
+                    ev.stopPropagation && ev.stopPropagation();
+                    // keep bottom buttons reachable via modal scroll (no page jump)
+                    setTimeout(function(){
+                      try{
+                        var modal = document.getElementById('secPaymentModal');
+                        if(!modal || !modal.contains(t)) return;
+                        var mRect = modal.getBoundingClientRect();
+                        var r = t.getBoundingClientRect();
+                        if(r.bottom > mRect.bottom - 90){
+                          modal.scrollTop += (r.bottom - (mRect.bottom - 90)) + 12;
+                        }else if(r.top < mRect.top + 70){
+                          modal.scrollTop -= ((mRect.top + 70) - r.top) + 12;
+                        }
+                      }catch(_e){}
+                    }, 120);
+                  }
+                }catch(_e){}
+              }, true);
+            });
+          }
+          var searchResBox = document.getElementById('secPaySearchResults');
+          if(searchResBox){
+            searchResBox.addEventListener('mousedown', function(ev){ try{ ev.preventDefault(); }catch(e){} }, true);
+            searchResBox.addEventListener('touchstart', function(ev){ try{ ev.stopPropagation(); }catch(e){} }, {passive:true, capture:true});
+          }
+        }catch(e){}
+        var saveBtn = document.getElementById('secPaymentSaveBtn');
+        if(saveBtn){
+          saveBtn.onclick = function(){
+            var amountEl = document.getElementById('secPayAmount');
+            var methodEl = document.getElementById('secPayMethod');
+            var receiptEl = document.getElementById('secPayReceiptRef');
+            var amountRaw = amountEl ? String(amountEl.value || '').trim() : '';
+            var amount = Number(amountRaw.replace(',', '.'));
+            var method = methodEl ? String(methodEl.value || '').trim() : '';
+            var receiptRef = receiptEl ? String(receiptEl.value || '').trim() : '';
+
+            if(!selectedStudent || !selectedStudent.tz){
+              setMsg('יש לבחור תלמיד לפני שמירה');
+              return;
+            }
+            if(!amountRaw || !isFinite(amount) || amount <= 0){
+              setMsg('יש להזין סכום תקין גדול מ-0');
+              try{ if(amountEl) amountEl.focus(); }catch(e){}
+              return;
+            }
+            if(method !== 'cash' && method !== 'credit'){
+              setMsg('יש לבחור אמצעי תשלום: מזומן או אשראי');
+              return;
+            }
+            // כלל אופציונלי (נתמך): אסמכתא חובה רק באשראי
+            if(method === 'credit' && !receiptRef){
+              setMsg('בתשלום אשראי יש להזין אסמכתא / קבלה');
+              try{ if(receiptEl) receiptEl.focus(); }catch(e){}
+              return;
+            }
+
+            var noteEl = document.getElementById('secPayNote');
+            var note = noteEl ? String(noteEl.value || '').trim() : '';
+
+            var financeApi = _secPayResolveFinanceAPI();
+            if(!(financeApi && typeof financeApi.addPayment === 'function')){
+              setMsg('שגיאה: FinanceAPI.addPayment לא זמין');
+              return;
+            }
+
+            var meta = {
+              method: method,
+              source: 'secretary_payment',
+              note: note || '',
+              receiptRef: receiptRef || '',
+              createdByRole: 'secretary'
+            };
+
+            function onSaveSuccess(){
+              try{
+                refreshSelectedStudentBalance();
+              }catch(e){}
+              try{
+                var aEl = document.getElementById('secPayAmount');
+                if(aEl) aEl.value = '';
+              }catch(e){}
+              try{
+                var rEl = document.getElementById('secPayReceiptRef');
+                if(rEl) rEl.value = '';
+              }catch(e){}
+              try{
+                var nEl2 = document.getElementById('secPayNote');
+                if(nEl2) nEl2.value = '';
+              }catch(e){}
+              try{ setMethod(''); }catch(e){}
+              setMsg('התשלום נשמר בהצלחה');
+              try{
+                var aFocus = document.getElementById('secPayAmount');
+                if(aFocus && aFocus.focus) aFocus.focus();
+              }catch(e){}
+            }
+            function onSaveError(err){
+              try{ console.warn('Secretary payment save failed', err); }catch(e){}
+              var msg = '';
+              try{
+                msg = (err && (err.userMessage || err.message)) ? String(err.userMessage || err.message) : '';
+              }catch(e){}
+              setMsg(msg ? ('שגיאה בשמירת תשלום: ' + msg) : 'שגיאה בשמירת תשלום');
+            }
+
+            try{
+              saveBtn.disabled = true;
+              var res = financeApi.addPayment(String(selectedStudent.tz), amount, meta);
+              if(res && typeof res.then === 'function'){
+                res.then(function(){ onSaveSuccess(); })
+                   .catch(function(err){ onSaveError(err); })
+                   .finally(function(){ try{ saveBtn.disabled = false; }catch(_e){} });
+                return;
+              }
+              try{ saveBtn.disabled = false; }catch(e){}
+              onSaveSuccess();
+            }catch(err){
+              try{ saveBtn.disabled = false; }catch(e){}
+              onSaveError(err);
+            }
+          };
+        }
+
+        try{ applySecPaymentTheme(); }catch(e){}
+
+        ov.addEventListener('click', function(ev){
+          try{
+            var m = document.getElementById('secPaymentModal');
+            if(m && ev && ev.target && !m.contains(ev.target)){ try{ document.body.style.overflow=''; }catch(_e){} closeOverlay('secPaymentOverlay'); }
+          }catch(e){}
+        });
+      }
+      try{
+        var msg = document.getElementById('secPayMsg'); if(msg){ msg.textContent=''; msg.style.visibility='hidden'; }
+        try{ applySecPaymentTheme(); }catch(_e){}
+        openOverlay('secPaymentOverlay');
+        try{
+          var _ov=document.getElementById('secPaymentOverlay');
+          if(_ov){
+            _ov.style.position='fixed'; _ov.style.inset='0';
+            _ov.style.display='flex'; _ov.style.alignItems='flex-start'; _ov.style.justifyContent='center';
+            _ov.style.padding='0'; _ov.style.boxSizing='border-box';
+            _ov.style.overflow='hidden'; _ov.style.zIndex='99999';
+          }
+          document.body.style.overflow='hidden';
+        }catch(_e){}
+        try{ var _m0=document.getElementById('secPaymentModal'); if(_m0){ _m0.style.overflowY='auto'; _m0.style.webkitOverflowScrolling='touch'; _m0.style.touchAction='pan-y'; _m0.style.width='min(760px,95vw)'; _m0.style.maxHeight='100dvh'; _m0.style.margin='0 auto'; _m0.style.borderRadius='0'; _m0.style.zIndex='100000'; } }catch(_e){}
+        try{ var _bar=document.getElementById('secPaymentSaveBtn'); if(_bar && _bar.parentElement){ var r=_bar.parentElement; r.style.position='static'; r.style.bottom=''; r.style.background='transparent'; r.style.paddingTop='12px'; r.style.marginTop='8px'; } }catch(_e){}
+        try{ window.__secEnsureTopBackBtn && window.__secEnsureTopBackBtn(); }catch(_e){}
+      }catch(e){ try{ ov.classList.add('show'); }catch(_e){} }
+    }catch(e){ console.warn('openSecretaryPaymentPage failed', e); }
+  };
+
   window.openSecretaryShop = function(){
-    if(!_secIsOn()) return;
+    try{ if(typeof window.closeMenu === 'function') window.closeMenu(); }catch(e){}
+    try{ if(typeof window.closeProfileMenu === 'function') window.closeProfileMenu(); }catch(e){}
+
     function escH(v){ try{ return String(v==null?'':v).replace(/[&<>\"']/g,function(c){return({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]);}); }catch(e){ return ''; } }
     function readOrders(){ try{ return (typeof shopReadOrders === 'function') ? (shopReadOrders()||[]) : []; }catch(e){ return []; } }
     function waitKey(){ return 'sec_shop_waiting_v1'; }
