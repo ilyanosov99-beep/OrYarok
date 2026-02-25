@@ -4149,196 +4149,29 @@ window.renderStudentStats = function(profile, username){
     }
   }catch(_e){}
   setText('spKpiOut', outCount);
-  // Money credit balance (₪) - derived from payments/credit key (TZ-based)
+  // Money credit balance (₪) - single source via FinanceAPI (same as secretary payment screen)
   var creditMoney = 0;
+  var tzKey = "";
   try{
-    // prefer TZ key (admin + student mapping), fallback to username key
-    var tzKey = "";
     try{ if(typeof resolveStudentTzFromUsername === "function" && username) tzKey = resolveStudentTzFromUsername(username); }catch(_e){}
     if(!tzKey && username){
       try{ tzKey = String(username||"").replace(/\D/g,""); }catch(_e2){}
     }
-
-    var rawc = null;
-
-    if(tzKey){
-      rawc = DBStorage.getItem(keyStudentCredit(tzKey));
+    var _finApi = null;
+    try{ _finApi = (window.FinanceAPI && typeof window.FinanceAPI === 'object') ? window.FinanceAPI : null; }catch(e){}
+    var _balRes = null;
+    if(_finApi && typeof _finApi.getStudentBalance === 'function'){
+      _balRes = _finApi.getStudentBalance(tzKey || username, username);
     }
-    if((rawc === null || rawc === undefined || rawc === "") && username){
-      rawc = DBStorage.getItem(keyStudentCredit(username));
-    }
-
-    var cm = parseFloat(rawc);
-    if(isFinite(cm)) {
-      creditMoney = cm;
-    } else {
-      // Fallback: compute from payment ledger if credit key is missing
-      var payObj = null;
-      if(tzKey) payObj = payLsGet(payKeyStudent(tzKey), null);
-      if((!payObj || typeof payObj !== "object") && username) payObj = payLsGet(payKeyStudent(username), null);
-      if(payObj && typeof payObj === "object"){
-        payEnsureLedger(payObj, tzKey || username);
-        var dueNow = Number(payObj.due);
-        if(isFinite(dueNow)) creditMoney = dueNow;
-      }
-    }
-  }catch(e){}
-  
-  // === CREDIT FROM COMPLETED LESSONS (v13) ===
-  try{
-    var __tzForBal = (tzKey || '').toString().trim();
-    var __userForBal = (username || '').toString().trim();
-
-    function __getLS(k){
-      try{
-        return (typeof DBStorage !== 'undefined' && DBStorage.getItem)
-          ? DBStorage.getItem(k)
-          : localStorage.getItem(k);
-      }catch(e){ return null; }
-    }
-    function __setLS(k, v){
-      try{
-        if(typeof DBStorage !== 'undefined' && DBStorage.setItem) DBStorage.setItem(k, v);
-        else localStorage.setItem(k, v);
-      }catch(e){}
-    }
-    function __normTzBal(v){
-      var d = String(v == null ? '' : v).replace(/\D/g,'');
-      if(d && d.length < 9) d = d.padStart(9,'0');
-      return d;
-    }
-
-    var __tzN = __normTzBal(__tzForBal) || __tzForBal;
-
-    // Sum lesson units from Lesson Management (daily reports)
-    var __rawReports = __getLS('admin_lesson_reports_v1');
-    var __reportsObj = {};
-    try{ __reportsObj = __rawReports ? JSON.parse(__rawReports) : {}; }catch(e){ __reportsObj = {}; }
-
-    var __totalUnits = 0;
-    function __parseUnits(r){
-      if(!r || typeof r !== 'object') return 1;
-      var ks = ['units','lessonUnits','lessons','lessonsCount','count','qty','amount','numLessons','num','value'];
-      for(var i=0;i<ks.length;i++){
-        var k = ks[i];
-        if(r[k] == null) continue;
-        var v = r[k];
-        if(typeof v === 'number' && isFinite(v)) return v;
-        if(typeof v === 'string'){
-          var m = String(v).match(/([0-9]+(?:\.[0-9]+)?)/);
-          if(m) return parseFloat(m[1]);
-        }
-      }
-      return 1;
-    }
-
-    if(__reportsObj && typeof __reportsObj === 'object'){
-      Object.keys(__reportsObj).forEach(function(dk){
-        var arr = __reportsObj[dk];
-        if(!Array.isArray(arr)) return;
-        arr.forEach(function(r){
-          if(!r) return;
-          var typ = String((r.type || r.kind || r.eventType || 'lesson') || 'lesson').toLowerCase().trim();
-          if(typ === 'outside') return; // outside is not charged from credit
-          var rtz = String(r.tz || '').trim();
-          if(__normTzBal(rtz) !== __tzN && rtz !== __tzForBal && rtz !== __userForBal) return;
-
-          var u = __parseUnits(r);
-          if(!isFinite(u) || u <= 0) u = 1;
-          __totalUnits += u;
-        });
-      });
-    }
-
-    var __spent = Math.round(__totalUnits * 150);
-
-    // Extra spending from credit (e.g., test order)
-    var __extraSpent = 0;
+    var _nBal = null;
     try{
-      function __getExtra(id){
-        if(!id) return 0;
-        var v = __getLS(keyStudentExtraSpent(id));
-        var n = parseFloat(v);
-        return isFinite(n) ? n : 0;
-      }
-      if(__tzForBal) __extraSpent = __getExtra(__tzForBal);
-      if((!__extraSpent || __extraSpent===0) && __userForBal) __extraSpent = __getExtra(__userForBal);
-    }catch(e){ __extraSpent = 0; }
-    if(isFinite(__extraSpent) && __extraSpent>0) __spent += Math.round(__extraSpent);
-
-    // Test orders spending (400₪ each) from admin log
-    try{
-      var __testRaw = __getLS('admin_test_orders_v1');
-      var __testObj = {};
-      try{ __testObj = __testRaw ? JSON.parse(__testRaw) : {}; }catch(e){ __testObj = {}; }
-      var __tSpent = 0;
-      var __tzMatch = __normTzBal(__tzForBal) || __tzForBal;
-      if(__testObj && typeof __testObj === 'object'){
-        Object.keys(__testObj).forEach(function(dk){
-          var arr = __testObj[dk];
-          if(!Array.isArray(arr)) return;
-          arr.forEach(function(r){
-            if(!r) return;
-            var rtz = __normTzBal(r.tz) || String(r.tz||'');
-            if(__tzMatch && rtz && rtz === __tzMatch){
-              var pr = Number(r.price);
-              if(!isFinite(pr) || pr<=0) pr = 400;
-              __tSpent += pr;
-            }
-          });
-        });
-      }
-      if(isFinite(__tSpent) && __tSpent>0) __spent += Math.round(__tSpent);
-    }catch(e){}
-
-    // paid_total baseline (money added by payments) - source of truth: payment ledger (pay.paidTotal)
-    function __paidKey(id){ return 'student_credit_paid_total_' + String(id||'').trim(); }
-
-    var __paidTotal = NaN;
-
-    // Prefer payment ledger totals (updates immediately when a payment is made)
-    try{
-      var __payObj = null;
-      try{ if(typeof payObj === 'object' && payObj) __payObj = payObj; }catch(_e){}
-      if(!__payObj && __tzForBal) __payObj = payLsGet(payKeyStudent(__tzForBal), null);
-      if((!__payObj || typeof __payObj !== 'object') && __userForBal) __payObj = payLsGet(payKeyStudent(__userForBal), null);
-
-      if(__payObj && typeof __payObj === 'object'){
-        var __pt = Number(__payObj.paidTotal || __payObj.paid || 0);
-        if(isFinite(__pt)) __paidTotal = __pt;
+      if(_balRes && typeof _balRes === 'object'){
+        _nBal = Number((_balRes.balance != null) ? _balRes.balance : _balRes.due);
+      } else {
+        _nBal = Number(_balRes);
       }
     }catch(e){}
-
-    // Fallback: stored baseline (older installs)
-    if(!isFinite(__paidTotal)){
-      var __paidRaw = null;
-      if(__tzForBal) __paidRaw = __getLS(__paidKey(__tzForBal));
-      if((__paidRaw === null || __paidRaw === undefined || __paidRaw === '') && __userForBal) __paidRaw = __getLS(__paidKey(__userForBal));
-      __paidTotal = parseFloat(__paidRaw);
-    }
-
-    if(!isFinite(__paidTotal)){
-      // Last resort: assume current credit includes payments already, so reverse by adding spent back
-      var __cur = parseFloat(creditMoney);
-      if(!isFinite(__cur)) __cur = 0;
-      __paidTotal = __cur + (__spent||0);
-    }
-
-    // Keep baseline key updated for stability across sessions
-    try{
-      if(__tzForBal) __setLS(__paidKey(__tzForBal), String(__paidTotal));
-      if(__userForBal) __setLS(__paidKey(__userForBal), String(__paidTotal));
-    }catch(e){}
-
-    var __newBal = __paidTotal - __spent;
-
-    if(isFinite(__newBal)){
-      creditMoney = __newBal;
-
-      // Keep credit key in sync (profile + shop use this)
-      if(__tzForBal) __setLS(keyStudentCredit(__tzForBal), String(Math.round(__newBal)));
-      if(__userForBal) __setLS(keyStudentCredit(__userForBal), String(Math.round(__newBal)));
-    }
+    if(isFinite(_nBal)) creditMoney = _nBal;
   }catch(e){}
 
   setText('spBalanceMoney', fmtMoney(creditMoney));
@@ -4855,7 +4688,6 @@ try{ closeProfileMenu(); }catch(e){}
         if(isFinite(a)) s += a;
       }
       s = payRound2(s);
-      if(s < 0) s = 0;
       return s;
     }catch(e){ return 0; }
   }
@@ -5124,33 +4956,39 @@ pay.lastPayment = payFmtDateTime(ts);
 
   // Central finance API (single pipeline / source of truth)
   
-function financeGetStudentBalanceByTz(tz){
+function financeGetStudentBalanceByTz(tz, username){
     tz = String(tz||'').trim();
+    username = String(username||'').trim();
+    if(!tz && username){
+      try{ if(typeof resolveStudentTzFromUsername === 'function') tz = String(resolveStudentTzFromUsername(username)||'').trim(); }catch(e){}
+      if(!tz){ try{ tz = String(username).replace(/\D/g,'').slice(0,9); }catch(e){} }
+    }
     if(!tz) return { balance: 0, due: 0 };
 
-    // Single canonical pipeline for all screens: student_credit_money_<TZ>
+    var bal = 0;
     try{
       var raw = DBStorage.getItem(keyStudentCredit(tz));
       var n = Number(String(raw == null ? '' : raw).replace(/,/g,''));
-      if(isFinite(n)) return { balance: n, due: n };
-    }catch(e){}
-
-    // Fallback only if credit is missing (do not merge legacy/new here)
-    try{
-      var keyP = payKeyStudent(tz);
-      var payObj = payLsGet(keyP, null);
-      if(payObj && typeof payObj === 'object'){
-        payEnsureLedger(payObj, tz);
-        var due = Number(payObj.due);
-        if(!isFinite(due)) due = Number(payLedgerSum(payObj));
-        if(isFinite(due)){
-          try{ DBStorage.setItem(keyStudentCredit(tz), String(due)); }catch(_e){}
-          return { balance: due, due: due };
+      if(isFinite(n)){
+        bal = n;
+      }else{
+        var payObj = payLsGet(payKeyStudent(tz), null);
+        if(payObj && typeof payObj === 'object'){
+          try{ payEnsureLedger(payObj, tz); }catch(_e){}
+          var due = Number(payObj.due);
+          if(!isFinite(due)) due = Number(payLedgerSum(payObj));
+          if(isFinite(due)){
+            bal = due;
+            try{
+              payObj.due = due;
+              payLsSet(payKeyStudent(tz), payObj);
+            }catch(_e){}
+            try{ DBStorage.setItem(keyStudentCredit(tz), String(due)); }catch(_e){}
+          }
         }
       }
     }catch(e){}
-
-    return { balance: 0, due: 0 };
+    return { balance: bal, due: bal };
   }
 
   function financeAddPaymentByTz(tz, amount, meta){
@@ -5207,6 +5045,57 @@ function financeGetStudentBalanceByTz(tz){
     }catch(_e){}
 
     return receipt;
+  }
+
+
+  function financeChargeLessonByTz(tz, units, meta){
+    tz = String(tz||'').trim();
+    units = Number(units);
+    if(!tz) return { ok:false, reason:'missing_tz' };
+    if(!isFinite(units) || units <= 0) units = 1;
+    var amount = Math.round((150 * units) * 100) / 100;
+    if(!isFinite(amount) || amount <= 0) return { ok:false, reason:'bad_units' };
+
+    var m = (meta && typeof meta === 'object') ? meta : {};
+    var chargeAmount = -Math.abs(amount); // lessons always charge (allow minus)
+    var note = String(m.note || (units === 0.5 ? 'חצי שיעור' : 'שיעור'));
+
+    var keyP = payKeyStudent(tz);
+    var payObj = payLsGet(keyP, {}) || {};
+    if(!payObj || typeof payObj !== 'object') payObj = {};
+    try{ payEnsureLedger(payObj, tz); }catch(e){}
+
+    try{
+      payLedgerAdd(payObj, {
+        ts: Date.now(),
+        type: 'lesson',
+        amount: chargeAmount,
+        note: note,
+        source: String(m.source || 'admin_queue'),
+        meta: (m.meta && typeof m.meta === 'object') ? m.meta : { units: units }
+      });
+    }catch(e){
+      return { ok:false, reason:'ledger_add_failed', error:e };
+    }
+
+    var dueNow = Number(payObj.due);
+    if(!isFinite(dueNow)) {
+      try{ dueNow = Number(payLedgerSum(payObj)); }catch(e){ dueNow = 0; }
+    }
+    if(!isFinite(dueNow)) dueNow = 0;
+    payObj.due = dueNow;
+
+    try{ payLsSet(keyP, payObj); }catch(e){ return { ok:false, reason:'persist_failed', error:e }; }
+    try{ DBStorage.setItem(keyStudentCredit(tz), String(dueNow)); }catch(e){}
+
+    try{
+      var prof = payLsGet(payKeyProfile(tz), {}) || {};
+      if(typeof prof !== 'object') prof = {};
+      prof.paymentsDue = dueNow;
+      payLsSet(payKeyProfile(tz), prof);
+    }catch(e){}
+
+    return { ok:true, tz:tz, units:units, amount:chargeAmount, balance:dueNow, payObj:payObj };
   }
 
   function financeCleanupLegacyStorage(){
@@ -5387,6 +5276,7 @@ function financeGetStudentBalanceByTz(tz){
   try{
     window.FinanceAPI = window.FinanceAPI || {};
     window.FinanceAPI.addPayment = financeAddPaymentByTz;
+    window.FinanceAPI.chargeLesson = financeChargeLessonByTz;
     window.FinanceAPI.getStudentBalance = financeGetStudentBalanceByTz;
     window.FinanceAPI.cleanupLegacyStorage = financeCleanupLegacyStorage;
     window.financeAPI = window.FinanceAPI;
@@ -9737,171 +9627,6 @@ function getStudent(tz) {
     saveQueue();
     renderQueue();
   }
-
-  
-  // ===== Completed lessons logging (v1) =====
-  function addCompletedLessonToStudent(tz, durationSec){
-    try{
-      tz = normalizeTz(tz);
-      if(!tz) return;
-
-      var now = new Date();
-      var iso = now.toISOString();
-      var dateStr = "";
-      var timeStr = "";
-      try{ dateStr = now.toLocaleDateString('he-IL'); }catch(e){ dateStr = (now.getDate()+"/"+(now.getMonth()+1)+"/"+now.getFullYear()); }
-      try{ timeStr = now.toLocaleTimeString('he-IL', {hour:'2-digit', minute:'2-digit'}); }catch(e){ timeStr = (String(now.getHours()).padStart(2,'0')+":"+String(now.getMinutes()).padStart(2,'0')); }
-
-      var prof = null;
-      try{ if(typeof getStudentProfile === 'function') prof = getStudentProfile(tz); }catch(e){ prof = null; }
-      if(!prof || typeof prof !== 'object'){
-        var s = getStudent(tz) || {};
-        prof = {
-          tz: String(tz),
-          id: String(tz),
-          firstName: readAny(s, ['firstName','firstname','fname','שם פרטי','שם_פרטי','שם']) || '',
-          lastName:  readAny(s, ['lastName','lastname','lname','שם משפחה','שם_משפחה']) || '',
-          license:   studentLicenseType(s) || ''
-        };
-        try{ prof.lessonsDone = studentLessonsDone(s) || 0; }catch(e){ prof.lessonsDone = 0; }
-        try{ prof.lessonsLeft = readAny(s, ['lessonsLeft','lessonsRemaining','remainingLessons','lessons_left','שיעוריםשנשארו']) || ""; }catch(e){}
-      }
-
-      if(!Array.isArray(prof.completedLessonsLog)) prof.completedLessonsLog = [];
-
-      // Convert duration into "lesson units" (1 = 40 דקות, 0.5 = 20 דקות)
-      var LESSON_SEC_LOCAL = 2400;
-      var dur = Number(durationSec);
-      if(!isFinite(dur) || dur <= 0) dur = LESSON_SEC_LOCAL;
-
-      var unitsRaw = dur / LESSON_SEC_LOCAL;
-      var units = Math.round(unitsRaw * 2) / 2;
-
-      // Ignore very short sessions (< 20 דקות)
-      if(units < 0.5) units = 0;
-
-      if(units > 0){
-        var full = Math.floor(units);
-        var half = (units - full) >= 0.5 ? 0.5 : 0;
-
-        for(var iL=0;iL<full;iL++){
-          prof.completedLessonsLog.push({
-            ts: iso,
-            date: dateStr,
-            time: timeStr,
-            durationMin: 40,
-            units: 1
-          });
-        }
-        if(half === 0.5){
-          prof.completedLessonsLog.push({
-            ts: iso,
-            date: dateStr,
-            time: timeStr,
-            durationMin: 20,
-            units: 0.5
-          });
-        }
-
-        var ld = parseFloat(prof.lessonsDone);
-        if(!isFinite(ld)) ld = 0;
-        prof.lessonsDone = Math.round((ld + units) * 2) / 2;
-
-        var ll = parseFloat(prof.lessonsLeft);
-        if(isFinite(ll)){
-          var newLeft = ll - units;
-          if(newLeft < 0) newLeft = 0;
-          prof.lessonsLeft = Math.round(newLeft * 2) / 2;
-        }
-
-        // Payments: reduce due by 150₪ per full lesson (0.5 => 75₪)
-        try{
-          var payKey = "student_payments_" + String(tz);
-          var payRaw = DBStorage.getItem(payKey);
-          if(payRaw){
-            var payObj = JSON.parse(payRaw);
-            if(payObj && typeof payObj === "object"){
-              // Ledger-based debit for lesson units (150₪ per 1.0, 75₪ per 0.5)
-              payObj = payEnsureLedger(payObj, String(tz));
-              var curDue = payLedgerSum(payObj);
-              var debit = Math.round((150 * units) * 100) / 100;
-              if(!isFinite(curDue) || curDue < 0) curDue = 0;
-              if(!isFinite(debit) || debit < 0) debit = 0;
-              if(debit > curDue) debit = curDue;
-              if(debit > 0){
-                payLedgerAdd(payObj, { ts: Date.now(), type: "lesson", amount: -debit, note: "שיעור", meta: { units: units } });
-              }else{
-                payObj.due = curDue;
-              }
-try{ DBStorage.setItem(payKey, JSON.stringify(payObj)); }catch(e2){}
-              // Keep credit key (₪) in sync with ledger-derived due
-              try{
-                var dueNow = Number(payObj.due||0);
-                if(!isFinite(dueNow) || dueNow < 0) dueNow = 0;
-                DBStorage.setItem(keyStudentCredit(tz), String(dueNow));
-              }catch(e3){}
-            }
-          }
-        }catch(e){}
-      }
-
-      try{ if(typeof setStudentProfile === 'function') setStudentProfile(tz, prof); }catch(e){
-        try{ DBStorage.setItem("student_profile_" + String(tz), JSON.stringify(prof||{})); }catch(_){}
-      }
-
-
-      // Mirror into per-student progress store too (used by some UI parts)
-      try{
-        var pKey = "student_progress_" + String(tz);
-        var pRaw = DBStorage.getItem(pKey);
-        var pObj = pRaw ? JSON.parse(pRaw) : {};
-        if(!pObj || typeof pObj !== "object") pObj = {};
-        pObj.lessonsDone = prof.lessonsDone;
-        pObj.lessonsLeft = prof.lessonsLeft;
-        if(!Array.isArray(pObj.completedLessonsLog)) pObj.completedLessonsLog = [];
-        try{
-          var _entry = (prof.completedLessonsLog && prof.completedLessonsLog.length) ? prof.completedLessonsLog[prof.completedLessonsLog.length-1] : null;
-          if(_entry){
-            var _ts = _entry.ts || "";
-            var exists = false;
-            if(_ts){
-              for(var _i=0; _i<pObj.completedLessonsLog.length; _i++){
-                var _r = pObj.completedLessonsLog[_i];
-                if(_r && (_r.ts === _ts)) { exists = true; break; }
-              }
-            }
-            if(!exists) pObj.completedLessonsLog.push(_entry);
-          }
-        }catch(e){}
-        DBStorage.setItem(pKey, JSON.stringify(pObj));
-      }catch(e){}
-
-      // keep admin registry consistent (demo)
-      try{
-        var regRaw = DBStorage.getItem("students_registry_v1");
-        if(regRaw){
-          var reg = JSON.parse(regRaw);
-          if(Array.isArray(reg)){
-            for(var i=0;i<reg.length;i++){
-              var r = reg[i];
-              if(!r || typeof r !== "object") continue;
-              var z = r.tz || r.id || r.userId || r.username || r.user || r.uid || r.teudatZehut || r["תז"] || r['ת"ז'];
-              if(z != null && String(z) === String(tz)){
-                reg[i] = Object.assign({}, r, prof, { tz: String(tz) });
-                break;
-              }
-            }
-            DBStorage.setItem("students_registry_v1", JSON.stringify(reg));
-          }else if(reg && typeof reg === "object"){
-            var key = String(tz);
-            var prev = reg[key] && typeof reg[key] === "object" ? reg[key] : {};
-            reg[key] = Object.assign({}, prev, prof, { tz: String(tz) });
-            DBStorage.setItem("students_registry_v1", JSON.stringify(reg));
-          }
-        }
-      }catch(e){}
-    }catch(e){}
-  }
   function addOutsideTrainingToStudent(tz, startMs, endMs){
     try{
       tz = normalizeTz(tz);
@@ -10529,7 +10254,78 @@ function tickTimers() {
   }
 
 // ===== Actions =====
-  function addStudentToQueue(tz) {
+  function __openQueueInsufficientBalancePrompt(opts){
+    opts = opts || {};
+    var tz = normalizeTz(opts.tz || '');
+    var credit = Number(opts.credit);
+    if(!isFinite(credit)) credit = 0;
+    var onContinue = (typeof opts.onContinue === 'function') ? opts.onContinue : function(){};
+
+    var old = document.getElementById('queueInsufficientBalanceOverlay');
+    if(old && old.parentNode) old.parentNode.removeChild(old);
+
+    var ov = document.createElement('div');
+    ov.id = 'queueInsufficientBalanceOverlay';
+    ov.style.cssText = 'position:fixed;inset:0;z-index:999999;display:flex;align-items:center;justify-content:center;background:rgba(0,0,0,.55);padding:16px;';
+
+    var box = document.createElement('div');
+    box.style.cssText = 'width:min(92vw,420px);background:#111;border:1px solid rgba(255,255,255,.12);border-radius:16px;padding:16px;color:#fff;box-shadow:0 12px 40px rgba(0,0,0,.35);text-align:right;direction:rtl;';
+
+    var title = document.createElement('div');
+    title.textContent = 'אין מספיק יתרה';
+    title.style.cssText = 'font-weight:700;font-size:18px;margin-bottom:8px;';
+
+    var msg = document.createElement('div');
+    var creditTxt = (typeof fmtMoney === 'function') ? fmtMoney(credit) : (String(Math.round(credit)) + '₪');
+    var requestedLessons = Number(opts.requestedLessons);
+    var requestedAmount = Number(opts.requestedAmount);
+    var missingAmount = Number(opts.missingAmount);
+    var msgText = 'לתלמיד אין מספיק יתרה לשיעור. יתרה נוכחית: ' + creditTxt + '. אפשר להעלות בכל זאת ולהכניס למינוס.';
+    if(isFinite(requestedLessons) && requestedLessons > 0){
+      var lessonsLabel = (requestedLessons % 1 === 0) ? String(requestedLessons) : String(requestedLessons).replace('.5',' וחצי');
+      msgText = 'לתלמיד אין מספיק יתרה לכמות שנבחרה (' + lessonsLabel + ' שיעור' + (requestedLessons===1 ? '' : 'ים') + '). יתרה נוכחית: ' + creditTxt;
+      if(isFinite(requestedAmount)){
+        var needTxt = (typeof fmtMoney === 'function') ? fmtMoney(requestedAmount) : (String(Math.round(requestedAmount)) + '₪');
+        msgText += ', נדרש: ' + needTxt;
+      }
+      if(isFinite(missingAmount) && missingAmount > 0){
+        var missTxt = (typeof fmtMoney === 'function') ? fmtMoney(missingAmount) : (String(Math.round(missingAmount)) + '₪');
+        msgText += ', חסר: ' + missTxt;
+      }
+      msgText += '. אפשר להעלות בכל זאת ולהכניס למינוס.';
+    }
+    msg.textContent = msgText;
+    msg.style.cssText = 'font-size:14px;line-height:1.5;opacity:.95;margin-bottom:14px;';
+
+    var row = document.createElement('div');
+    row.style.cssText = 'display:flex;gap:10px;justify-content:flex-start;flex-wrap:wrap;';
+
+    var btnClose = document.createElement('button');
+    btnClose.type = 'button';
+    btnClose.textContent = 'סגור';
+    btnClose.style.cssText = 'min-width:110px;padding:10px 14px;border-radius:12px;border:1px solid rgba(255,255,255,.18);background:#222;color:#fff;font-weight:600;';
+
+    var btnContinue = document.createElement('button');
+    btnContinue.type = 'button';
+    btnContinue.textContent = 'תעלה בכל זאת';
+    btnContinue.style.cssText = 'min-width:140px;padding:10px 14px;border-radius:12px;border:0;background:#1f8f4e;color:#fff;font-weight:700;';
+
+    function closePrompt(){ try{ ov.remove(); }catch(e){ if(ov.parentNode) ov.parentNode.removeChild(ov); } }
+    btnClose.addEventListener('click', closePrompt);
+    ov.addEventListener('click', function(e){ if(e.target === ov) closePrompt(); });
+    btnContinue.addEventListener('click', function(){ closePrompt(); try{ onContinue(); }catch(e){} });
+
+    row.appendChild(btnContinue);
+    row.appendChild(btnClose);
+    box.appendChild(title);
+    box.appendChild(msg);
+    box.appendChild(row);
+    ov.appendChild(box);
+    document.body.appendChild(ov);
+  }
+
+  function __addStudentToQueueCore(tz, opts) {
+    opts = opts || {};
     const z = normalizeTz(tz);
     if (!z) return;
 
@@ -10549,12 +10345,13 @@ function tickTimers() {
       return;
     }
 
-    const lessonsToday = 1;
+    var lessonsToday = normalizeLessonsCount((opts && opts.lessonsToday != null) ? opts.lessonsToday : 1);
     queue.push({
       tz: z,
       lessonsToday,
       notes: '',
       status: '—',
+      allowNegativeLessonCharge: !!(opts && opts.allowNegativeLessonCharge),
       timer: {
         totalSec: lessonsToday * LESSON_SEC,
         remainingSec: lessonsToday * LESSON_SEC,
@@ -10567,8 +10364,51 @@ function tickTimers() {
     });
 
     saveQueue();
-    showMsg('', 'ok');
+    if(lessonsToday === 0.5){
+      showMsg('יתרה מספיקה לחצי שיעור בלבד — התלמיד נוסף כחצי שיעור', 'ok');
+    }else if(opts && opts.allowNegativeLessonCharge){
+      showMsg('התלמיד נוסף. החיוב יוכל להיכנס למינוס בסיום השיעור', 'ok');
+    }else{
+      showMsg('', 'ok');
+    }
     renderQueue();
+  }
+
+  function addStudentToQueue(tz) {
+    const z = normalizeTz(tz);
+    if (!z) return;
+
+    var credit = 0;
+    try{ credit = Number(getCredit(z)); }catch(e){ credit = 0; }
+    if(!isFinite(credit)) credit = 0;
+    // Prefer payments ledger when available (single source of truth for money balance).
+    // In some flows profile UI shows ledger balance while keyStudentCredit is stale/missing.
+    try{
+      var payKey = "student_payments_" + String(z);
+      var payRaw = DBStorage.getItem(payKey);
+      if(payRaw){
+        var payObj = JSON.parse(payRaw);
+        if(payObj && typeof payObj === 'object'){
+          try{ if(typeof payEnsureLedger === 'function') payObj = payEnsureLedger(payObj, String(z)); }catch(_e){}
+          var ledgerCredit = (typeof payLedgerSum === 'function') ? Number(payLedgerSum(payObj)) : Number(payObj.due);
+          if(isFinite(ledgerCredit)) credit = ledgerCredit;
+        }
+      }
+    }catch(e){}
+
+    if (credit < 75) {
+      return __openQueueInsufficientBalancePrompt({
+        tz: z,
+        credit: credit,
+        onContinue: function(){ __addStudentToQueueCore(z, { lessonsToday: 1, allowNegativeLessonCharge: true }); }
+      });
+    }
+
+    if (credit < 150) {
+      return __addStudentToQueueCore(z, { lessonsToday: 0.5, allowNegativeLessonCharge: false });
+    }
+
+    return __addStudentToQueueCore(z, { lessonsToday: 1, allowNegativeLessonCharge: false });
   }
 
   function moveStudentToBottom(tz) {
@@ -11257,34 +11097,68 @@ document.addEventListener('input', (e) => {
         prof.lessonsLeft = Math.round(newLeft * 2) / 2;
       }
 
-      // Payments: reduce due by 150₪ per lesson unit
+      // Payments: charge lesson via FinanceAPI (single money source of truth)
+      // Pull queue override flags safely (avoid undefined variable crash on lesson finish)
+      var __allowNegativeLessonCharge = false;
+      var __balanceCheckBypass = null;
+      var __balanceAtInsert = null;
+      try{
+        if(typeof queue !== "undefined" && Array.isArray(queue)){
+          for(var qi2=0; qi2<queue.length; qi2++){
+            var qrow = queue[qi2];
+            if(qrow && String(qrow.tz) === String(tz)){
+              __allowNegativeLessonCharge = !!qrow.allowNegativeLessonCharge;
+              __balanceCheckBypass = qrow.balanceCheckBypass || null;
+              __balanceAtInsert = (qrow.balanceAtInsert != null ? Number(qrow.balanceAtInsert) : null);
+              if(!isFinite(__balanceAtInsert)) __balanceAtInsert = null;
+              break;
+            }
+          }
+        }
+      }catch(e){}
+
       var payObj = null;
       try{
-        var payKey = "student_payments_" + String(tz);
-        var payRaw = DBStorage.getItem(payKey);
-        if(payRaw){
-          payObj = JSON.parse(payRaw);
-          if(!payObj || typeof payObj !== "object") payObj = null;
+        var chargeRes = null;
+        if(window.FinanceAPI && typeof window.FinanceAPI.chargeLesson === 'function'){
+          chargeRes = window.FinanceAPI.chargeLesson(String(tz), units, {
+            source: 'admin_queue',
+            note: (units === 0.5 ? 'חצי שיעור' : 'שיעור'),
+            meta: {
+              units: units,
+              allowNegative: !!__allowNegativeLessonCharge,
+              balanceCheckBypass: __balanceCheckBypass,
+              balanceAtInsert: __balanceAtInsert
+            }
+          });
         }
-        if(payObj){
-          payObj = payEnsureLedger(payObj, String(tz));
-          var curDue = payLedgerSum(payObj);
-          var debit = Math.round((150 * units) * 100) / 100;
-          if(!isFinite(curDue) || curDue < 0) curDue = 0;
-          if(!isFinite(debit) || debit < 0) debit = 0;
-          if(debit > curDue) debit = curDue;
-          if(debit > 0){
-            payLedgerAdd(payObj, { ts: Date.now(), type: "lesson", amount: -debit, note: "שיעור", meta: { units: units } });
-          }else{
-            payObj.due = curDue;
-          }
-          // keep common aliases in sync if present
-          if(payObj && typeof payObj === "object"){
-            if('balance' in payObj) payObj.balance = payObj.due;
-            if('remaining' in payObj) payObj.remaining = payObj.due;
-          }
-          DBStorage.setItem(payKey, JSON.stringify(payObj));        }
+        if(chargeRes && chargeRes.ok){
+          payObj = chargeRes.payObj || null;
+        }else if(chargeRes && !chargeRes.ok){
+          // fallback only if finance api failed unexpectedly
+          try{
+            var __pk = 'student_payments_' + String(tz);
+            var __pr = DBStorage.getItem(__pk);
+            payObj = __pr ? JSON.parse(__pr) : null;
+          }catch(_e){ payObj = null; }
+        }
       }catch(e){}
+
+      // Clear one-time override so only explicit admin approval can create minus again
+      if(__allowNegativeLessonCharge){
+        try{
+          if(typeof queue !== 'undefined' && Array.isArray(queue)){
+            for(var qi3=0; qi3<queue.length; qi3++){
+              if(queue[qi3] && String(queue[qi3].tz) === String(tz)){
+                queue[qi3].allowNegativeLessonCharge = false;
+                try{ delete queue[qi3].balanceCheckBypass; }catch(_e){}
+                break;
+              }
+            }
+            try{ saveQueue(); }catch(_e){}
+          }
+        }catch(e){}
+      }
 
       // Save profile under tz key
       try{
@@ -11407,6 +11281,20 @@ document.addEventListener('input', (e) => {
           }catch(e){}
         }
       }catch(e){}
+
+// Refresh open student/admin profile in-place after lesson completion (same student only)
+try{
+  var activeTzNow = "";
+  try{ activeTzNow = normalizeTz((window.__activeStudentTz || (window.APP_STATE && window.APP_STATE.activeStudentTz) || "")); }catch(_e){
+    activeTzNow = String((window.__activeStudentTz || (window.APP_STATE && window.APP_STATE.activeStudentTz) || "")).replace(/\D/g,"");
+  }
+  if(String(activeTzNow||"") === String(tz||"")){
+    try{
+      window.dispatchEvent(new CustomEvent("student-data-updated", { detail: { tz:String(tz), source:"addCompletedLessonToStudent", kind:"lesson-completed" } }));
+    }catch(_e){}
+    try{ if(typeof window.renderStudentProfile === "function") window.renderStudentProfile(); }catch(_e){}
+  }
+}catch(e){}
     }catch(e){}
   }
 
@@ -20552,6 +20440,8 @@ function resetSecPaymentForm(){
         try{ if(ov && typeof ov.__resetSecPaymentForm==='function') ov.__resetSecPaymentForm(); else if(typeof resetSecPaymentForm==='function') resetSecPaymentForm(); }catch(_e){}
         try{ applySecPaymentTheme(); }catch(_e){}
         openOverlay('secPaymentOverlay');
+        try{ if(ov && typeof ov.__resetSecPaymentForm==='function') ov.__resetSecPaymentForm(); }catch(_e){}
+        try{ setTimeout(function(){ try{ if(ov && typeof ov.__resetSecPaymentForm==='function') ov.__resetSecPaymentForm(); }catch(__e){} }, 0); }catch(_e){}
         try{
           var _ov=document.getElementById('secPaymentOverlay');
           if(_ov){
