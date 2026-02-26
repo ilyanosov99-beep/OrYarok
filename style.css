@@ -1,20 +1,27 @@
 /* ===== style block 1 (from original HTML) ===== */
 .top-home-btn{
-  position:fixed;
-  top: calc(var(--safe-top, 0px) + 0px);
-  /* left of cart button (do not overlap) */
-  right: 0px;
-  left:auto;
-  width:var(--home-icon-size);
-  height:var(--home-icon-size);
-  background:transparent;
-  border:none;
-  padding:0;
-  overflow:visible;
-  /* BELOW menu blur/scrim so it will not float above the menu */
-  z-index:16050;
-  display:none;
-  pointer-events:auto;
+  position: fixed;
+  top: var(--top-icon-top);
+  right: var(--top-icon-inset);
+  left: auto;
+  bottom: auto;
+
+  width: var(--top-icon-size);
+  height: var(--top-icon-size);
+
+  background: transparent;
+  border: none;
+  padding: 0;
+
+  display: none; /* shown only when a sub-page is open */
+  align-items: center;
+  justify-content: center;
+
+  overflow: hidden;
+  border-radius: 50%;
+
+  z-index: 16050;
+  pointer-events: auto;
 }
 html{margin:0;padding:0;background:transparent;}
 /* Dynamic viewport fallback for mobile (dvh when supported, vh fallback) */
@@ -82,6 +89,9 @@ body.theme-day #forumPage *{
   --page-anim-ease: cubic-bezier(.16,1,.3,1);
   --kb-bottom-offset: 0px;
   --dock-safe-bottom: var(--safe-bottom, 0px);
+  --top-icon-size: clamp(84px, 18vw, 124px);
+  --top-icon-inset: 12px;
+  --top-icon-top: calc(env(safe-area-inset-top, 0px) + 10px);
 }
 
 /* לוגו */
@@ -99,13 +109,12 @@ width:80%;
   visibility:visible !important;
 }
 .top-home-btn img{
-  width:100%;
-  height:100%;
-  display:block;
-  pointer-events:none;
-  object-fit:contain;
-  transform: scale(1.38);
-  transform-origin: center;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+  object-fit: cover;
+  transform: none;
 }
 
 /* מצב בית */
@@ -759,25 +768,24 @@ body.menu-open::before{
 .home-contact-btn,
 .home-shop-btn,
 .home-location-btn,
-.home-profile-btn{
-  position:fixed;
-  z-index:9999;
-  pointer-events:auto;
-  background:transparent;
-  border:none;
-  padding:0;
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-}
+.home-profile-btn{ left: var(--top-icon-inset); top: var(--top-icon-top); right: auto; bottom: auto; width: var(--top-icon-size); height: var(--top-icon-size); overflow:hidden; border-radius:50%; }
 .home-contact-btn{ right:8px; inset-inline-end:8px; bottom:20px; width:var(--home-icon-size-sm); height:var(--home-icon-size-sm); }
 .home-location-btn{ right:100px; inset-inline-end:100px; bottom:16px; width:var(--home-loc-icon-size); height:calc(var(--home-loc-icon-size) + clamp(0px, .5vw, 2px)); }
-.home-profile-btn{ left:10px; inset-inline-start:10px; top:10px; right:auto; inset-inline-end:auto; bottom:auto; width:var(--home-profile-icon-size); height:var(--home-profile-icon-size); }
+.home-profile-btn{ left:10px; top:10px; right:auto; bottom:auto; width:var(--home-profile-icon-size); height:var(--home-profile-icon-size); }
 
 .home-contact-btn img{ width:100%; height:100%; display:block; pointer-events:none; }
 .home-location-btn img{ width:100%; height:100%; display:block; pointer-events:none; }
-.home-profile-btn img{ width:100%; height:100%; display:block; object-fit:contain; pointer-events:none; }
+.home-profile-btn img{ width:100%; height:100%; display:block; object-fit:cover; pointer-events:none; transform:none; }
 
+
+/* Top icons visibility rules:
+   - Profile icon appears only on HOME (no sub-page)
+   - Home(back) icon appears only when a sub-page is open */
+body.page-open #profileBtn{ display:none !important; }
+body:not(.page-open) #profileBtn{ display:inline-flex !important; }
+
+body.page-open #homeBtn{ display:inline-flex !important; }
+body:not(.page-open) #homeBtn{ display:none !important; }
 /* Secretary: Mail floating button (locked to home page, does not jump with keyboard) */
 .sec-mail-btn{
   position:fixed;
@@ -6444,22 +6452,6 @@ body.theme-day .leave-msg-hint{
 #mgrAdsSaveBtn, #mgrAdsDeleteBtn{ position:relative; z-index:20; touch-action:manipulation; }
 .mgr-ads-actions{ position:relative; z-index:900003 !important; pointer-events:auto; }
 
-/* FORCE: home/profile icon buttons final positions */
-.home-profile-btn{
-  left:6px !important;
-  top:16px !important;
-  right:auto !important;
-  bottom:auto !important;
-  transform:none !important;
-}
-#homeBtn.top-home-btn, .top-home-btn{
-  right:0px !important;
-  top:11px !important;
-  left:auto !important;
-  bottom:auto !important;
-  transform:none !important;
-}
-
 /* ===== Stage 7: baseline responsive breakpoints (cross-device) ===== */
 @media (max-width: 360px){
   :root{
@@ -6704,4 +6696,12 @@ input[type="reset"] {
     animation-duration: 1ms !important;
     animation-iteration-count: 1 !important;
   }
+}
+
+/* === vNEXT hotfix: force PROFILE to physical left (RTL-safe) ===
+   Do NOT change sizes/heights/home button. Only lock profile to left. */
+#profileBtn,
+.home-profile-btn{
+  left: var(--top-icon-inset) !important;
+  right: auto !important;
 }
