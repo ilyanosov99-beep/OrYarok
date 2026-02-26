@@ -1,8 +1,8 @@
 /* ===== style block 1 (from original HTML) ===== */
 .top-home-btn{
   position: fixed;
-  top: var(--top-icon-top);
-  right: var(--top-icon-inset);
+  top: calc(var(--top-icon-top) + 8px);
+  right: calc(var(--top-icon-inset) - 6px);
   left: auto;
   bottom: auto;
 
@@ -25,7 +25,7 @@
 }
 html{margin:0;padding:0;background:transparent;}
 /* Dynamic viewport fallback for mobile (dvh when supported, vh fallback) */
-:root{--app-vh:100vh; --home-icon-size:clamp(72px, 22vw, 108px); --home-icon-size-sm:clamp(70px, 21vw, 103px); --home-loc-icon-size:clamp(74px, 22vw, 108px); --home-profile-icon-size:clamp(72px, 21vw, 100px); --start-btn-img-w:clamp(320px, 78vw, 480px);} 
+:root{--app-vh:100vh; --home-icon-size:clamp(72px, 22vw, 108px); --home-icon-size-sm:clamp(70px, 21vw, 103px); --home-loc-icon-size:clamp(74px, 22vw, 108px); --start-btn-img-w:clamp(320px, 78vw, 480px);} 
 @supports (height: 100dvh){
   :root{--app-vh:100dvh;}
 }
@@ -767,12 +767,11 @@ body.menu-open::before{
 /* כפתורי בית */
 .home-contact-btn,
 .home-shop-btn,
-.home-location-btn,
-.home-profile-btn{ left: var(--top-icon-inset); top: var(--top-icon-top); right: auto; bottom: auto; width: var(--top-icon-size); height: var(--top-icon-size); overflow:hidden; border-radius:50%; }
+.home-location-btn{ left: var(--top-icon-inset); top: var(--top-icon-top); right: auto; bottom: auto; width: var(--top-icon-size); height: var(--top-icon-size); overflow:hidden; border-radius:50%; }
+.home-profile-btn{ position:fixed; left: calc(var(--top-icon-inset) - 6px); right:auto; top: var(--top-icon-top); bottom:auto; width: var(--top-icon-size); height: var(--top-icon-size); overflow:hidden; border-radius:50%; }
+
 .home-contact-btn{ right:8px; inset-inline-end:8px; bottom:20px; width:var(--home-icon-size-sm); height:var(--home-icon-size-sm); }
 .home-location-btn{ right:100px; inset-inline-end:100px; bottom:16px; width:var(--home-loc-icon-size); height:calc(var(--home-loc-icon-size) + clamp(0px, .5vw, 2px)); }
-.home-profile-btn{ left:10px; top:10px; right:auto; bottom:auto; width:var(--home-profile-icon-size); height:var(--home-profile-icon-size); }
-
 .home-contact-btn img{ width:100%; height:100%; display:block; pointer-events:none; }
 .home-location-btn img{ width:100%; height:100%; display:block; pointer-events:none; }
 .home-profile-btn img{ width:100%; height:100%; display:block; object-fit:cover; pointer-events:none; transform:none; }
@@ -6458,7 +6457,6 @@ body.theme-day .leave-msg-hint{
     --home-icon-size: clamp(64px, 20vw, 88px);
     --home-icon-size-sm: clamp(62px, 19vw, 84px);
     --home-loc-icon-size: clamp(66px, 20vw, 90px);
-    --home-profile-icon-size: clamp(64px, 19vw, 86px);
     --start-btn-img-w: min(88vw, 360px);
   }
   .page-inner{
@@ -6473,7 +6471,6 @@ body.theme-day .leave-msg-hint{
     --home-icon-size: clamp(84px, 11vw, 120px);
     --home-icon-size-sm: clamp(80px, 10vw, 112px);
     --home-loc-icon-size: clamp(86px, 11vw, 122px);
-    --home-profile-icon-size: clamp(82px, 10vw, 116px);
     --start-btn-img-w: min(64vw, 520px);
   }
   .page-inner{
@@ -6700,8 +6697,3 @@ input[type="reset"] {
 
 /* === vNEXT hotfix: force PROFILE to physical left (RTL-safe) ===
    Do NOT change sizes/heights/home button. Only lock profile to left. */
-#profileBtn,
-.home-profile-btn{
-  left: var(--top-icon-inset) !important;
-  right: auto !important;
-}
