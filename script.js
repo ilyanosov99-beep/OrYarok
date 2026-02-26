@@ -8389,9 +8389,6 @@ obj[dateKey].push({
       units
     };
 
-    // Report-only function: ignore any financial fields if passed by mistake.
-    // Charging must go only through FinanceAPI.chargeLesson(...).
-
     // De-duplicate identical records (prevents double blocks in "ניהול שיעורים")
     const sMs = _getStartMs(rec);
     const eMs = _getEndMs(rec);
@@ -10886,6 +10883,39 @@ document.addEventListener('input', (e) => {
       const it = queue.find((x) => x.tz === activeLessonsModalTz);
       if (!it) return;
       const next = normalizeLessonsCount((Number(it.lessonsToday) || 1) + 0.5);
+
+      var credit = 0;
+      try{ credit = Number(getCredit(activeLessonsModalTz)); }catch(e){ credit = 0; }
+      if(!isFinite(credit)) credit = 0;
+      try{
+        var payKey = 'student_payments_' + String(activeLessonsModalTz);
+        var payRaw = DBStorage.getItem(payKey);
+        if(payRaw){
+          var payObj = JSON.parse(payRaw);
+          if(payObj && typeof payObj === 'object'){
+            try{ if(typeof payEnsureLedger === 'function') payObj = payEnsureLedger(payObj, String(activeLessonsModalTz)); }catch(_e){}
+            var ledgerCredit = (typeof payLedgerSum === 'function') ? Number(payLedgerSum(payObj)) : Number(payObj.due);
+            if(isFinite(ledgerCredit)) credit = ledgerCredit;
+          }
+        }
+      }catch(e){}
+
+      var requiredAmount = Math.round(next * 150 * 100) / 100;
+      if(!it.allowNegativeLessonCharge && credit < requiredAmount){
+        return __openQueueInsufficientBalancePrompt({
+          tz: activeLessonsModalTz,
+          credit: credit,
+          requestedLessons: next,
+          requestedAmount: requiredAmount,
+          missingAmount: Math.max(0, requiredAmount - credit),
+          onContinue: function(){
+            try{ it.allowNegativeLessonCharge = true; }catch(e){}
+            setLessonsToday(activeLessonsModalTz, next);
+            if (lessonsCount) lessonsCount.textContent = String(next);
+          }
+        });
+      }
+
       setLessonsToday(activeLessonsModalTz, next);
       if (lessonsCount) lessonsCount.textContent = String(next);
     });
