@@ -46,7 +46,7 @@ body::after{
   inset-inline:0;
   height: var(--app-lock-h, var(--app-vh));
   bottom:auto;
-  background:url("road_bg.png") no-repeat 70% bottom/cover;
+  background:none;
   z-index:-1;
   pointer-events:none;
 }
@@ -54,6 +54,11 @@ body::after{
 /* Day mode background override (same sizing/positioning, image only) */
 body.theme-day::after{
   background:url("day_bg.png") no-repeat 70% bottom/cover;
+}
+
+/* Night mode home background */
+body.theme-night::after{
+  background:url("road_bg.png") no-repeat 70% bottom/cover;
 }
 
 /* Prevent background jump when keyboard opens (day + night, all roles)
@@ -91,7 +96,7 @@ body.theme-day #forumPage *{
   --dock-safe-bottom: var(--safe-bottom, 0px);
   --top-icon-size: clamp(84px, 18vw, 124px);
   --top-icon-inset: 12px;
-  --top-icon-top: calc(env(safe-area-inset-top, 0px) + 10px);
+  --top-icon-top: calc(env(safe-area-inset-top, 0px) + -4px);
 }
 
 /* לוגו */
@@ -191,6 +196,138 @@ body.theme-day #secComposeOverlay .sec-mail-box{
   font-size: 18px;
   text-align: center;
   letter-spacing: .2px;
+}
+
+/* ===== Secretary Compose: modern, stable modal ===== */
+#secComposeOverlay .sec-mail-box{ overflow:hidden; }
+#secComposeOverlay .sec-compose-head{
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding: 10px 16px 8px;
+  border-bottom: 1px solid rgba(255,255,255,.18);
+  background: rgba(0,0,0,.28);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+body.theme-day #secComposeOverlay .sec-compose-head{
+  border-bottom-color: rgba(0,0,0,.14);
+  background: rgba(255,255,255,.75);
+}
+#secComposeOverlay .sec-compose-title{ padding: 0; }
+#secComposeOverlay .sec-compose-x{
+  position:absolute;
+  left: 12px;
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  border: 2px solid rgba(255,255,255,.92);
+  background: rgba(255,255,255,.08);
+  color: rgba(255,255,255,.92);
+  font-weight: 1000;
+  font-size: 18px;
+  line-height: 1;
+}
+body.theme-day #secComposeOverlay .sec-compose-x{
+  border-color: rgba(0,0,0,.92);
+  background: rgba(0,0,0,.04);
+  color: #111;
+}
+
+#secComposeOverlay .sec-compose-form{
+  padding: 12px 14px 14px;
+  display:flex;
+  flex-direction:column;
+  gap: 12px;
+  max-height: calc(var(--app-vh) - 170px);
+  overflow:auto;
+}
+
+#secComposeOverlay .sec-compose-intro{
+  display:flex;
+  flex-direction:column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  border: 2px solid rgba(255,255,255,.92);
+  background: rgba(255,255,255,.06);
+}
+body.theme-day #secComposeOverlay .sec-compose-intro{
+  border-color: rgba(0,0,0,.92);
+  background: rgba(0,0,0,.03);
+}
+#secComposeOverlay .sec-compose-badge{
+  display:inline-flex;
+  align-self:flex-start;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-weight: 1000;
+  font-size: 12px;
+  letter-spacing: .2px;
+  border: 2px solid rgba(22,215,154,.55);
+  background: rgba(22,215,154,.16);
+  color: #eafff7;
+}
+body.theme-day #secComposeOverlay .sec-compose-badge{
+  border-color: rgba(0,0,0,.92);
+  background: rgba(0,0,0,.06);
+  color:#111;
+}
+#secComposeOverlay .sec-compose-sub{
+  font-weight: 800;
+  font-size: 13px;
+  line-height: 1.25;
+  color: rgba(255,255,255,.92);
+}
+body.theme-day #secComposeOverlay .sec-compose-sub{ color:#111; }
+
+#secComposeOverlay .sec-compose-card{
+  padding: 12px;
+  border-radius: 18px;
+  border: 2px solid rgba(255,255,255,.92);
+  background: rgba(255,255,255,.04);
+}
+body.theme-day #secComposeOverlay .sec-compose-card{
+  border-color: rgba(0,0,0,.92);
+  background: rgba(0,0,0,.02);
+}
+#secComposeOverlay .sec-compose-card-title{
+  font-weight: 1000;
+  font-size: 14px;
+  margin-bottom: 8px;
+  color: rgba(255,255,255,.92);
+}
+body.theme-day #secComposeOverlay .sec-compose-card-title{ color:#111; }
+
+#secComposeOverlay .sec-compose-textarea{ min-height: 140px; resize: vertical; }
+
+#secComposeOverlay .sec-compose-meta{
+  margin-top: 8px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+}
+#secComposeOverlay .sec-compose-tip{
+  font-size: 12px;
+  font-weight: 700;
+  opacity: .9;
+  color: rgba(255,255,255,.86);
+}
+body.theme-day #secComposeOverlay .sec-compose-tip{ color:#111; }
+
+#secComposeOverlay .sec-compose-actions{
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding: 10px 0 0;
+  background: linear-gradient(to bottom, rgba(0,0,0,0), rgba(0,0,0,.35) 45%, rgba(0,0,0,.55));
+}
+body.theme-day #secComposeOverlay .sec-compose-actions{
+  background: linear-gradient(to bottom, rgba(255,255,255,0), rgba(255,255,255,.72) 45%, rgba(255,255,255,.92));
 }
 
 body:not(.theme-day) #secMailOverlay .popup-title,
@@ -477,7 +614,7 @@ pointer-events: auto;
   bottom:0;
   z-index:0;
   pointer-events:none;
-  background:url("bg_blur_logo.png") center 30%/cover no-repeat;
+  background:none;
 }
 
 .page::after{
@@ -3818,7 +3955,26 @@ body.shopcart-open .shopcart-overlay{ display:flex; }
   display:block;
 }
 
-  /* Student Profile - clickable KPI + modal */
+  
+/* Secretary student profile: clickable rows */
+
+/* Generic clickable balance (transactions history opener) */
+.tx-clickable{
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#secStudentProfileOverlay .sp-kpiClickable{ cursor:pointer; -webkit-tap-highlight-color: transparent; }
+#secStudentProfileOverlay #spLessonsDone,
+#secStudentProfileOverlay #spBalanceMoney{
+  cursor:pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* Student Profile - clickable KPI + modal */
   #studentProfilePage .sp-kpiClickable{ cursor:pointer; -webkit-tap-highlight-color: transparent; }
   /* Ensure no child element shows the blue tap highlight on Android */
   #studentProfilePage .sp-kpiClickable *{ -webkit-tap-highlight-color: transparent; }
@@ -4549,7 +4705,9 @@ body.ts-picker-open .ts-picker-overlay{ display:flex; }
 #lessonsHistoryModal .sp-table td,
 #lessonsHistoryModal .sp-table th,
 #outsideHistoryModal .sp-table td,
-#outsideHistoryModal .sp-table th{
+#outsideHistoryModal .sp-table th,
+#secTxHistoryModal .sp-table td,
+#secTxHistoryModal .sp-table th{
   color: #ffffff !important;
   padding: 12px 14px;
 }
@@ -4557,6 +4715,12 @@ body.ts-picker-open .ts-picker-overlay{ display:flex; }
   color: #ffffff !important;
 }
 #lessonsHistoryModal .sp-table thead td{
+  color: #ffffff !important;
+}
+
+/* Transactions modal: keep headers readable as well */
+#secTxHistoryModal .sp-table .k,
+#secTxHistoryModal .sp-table thead td{
   color: #ffffff !important;
 }
 
@@ -6697,3 +6861,238 @@ input[type="reset"] {
 
 /* === vNEXT hotfix: force PROFILE to physical left (RTL-safe) ===
    Do NOT change sizes/heights/home button. Only lock profile to left. */
+
+
+/* =======================
+   Secretary: Student Profile Modal + Quick Message
+   ======================= */
+#secStudentProfileOverlay{
+  z-index:20000;
+  align-items:stretch;
+  padding:0;
+}
+#secSpShell{
+  width:100vw;
+  height:100vh;
+  max-height:100vh;
+  overflow:auto;
+  border-radius:0;
+  box-shadow:none;
+}
+
+/* Override the page fullscreen layout when mounted inside secretary modal */
+#secSpShell #studentProfilePage{
+  position:relative !important;
+  inset:auto !important;
+  width:100% !important;
+  height:auto !important;
+  min-height:unset !important;
+  max-height:unset !important;
+  border-radius:0;
+  overflow:hidden;
+}
+#secSpShell #studentProfilePage .page-inner{
+  padding-top:0 !important;
+  padding-bottom:0 !important;
+}
+#studentProfilePage.sec-sp-modalized{
+  background:transparent;
+}
+
+/* Header actions (send + close) */
+.sec-sp-hdr-actions{
+  margin-inline-start:auto;
+  display:flex;
+  gap:10px;
+  align-items:center;
+}
+.sec-sp-send{
+  padding:10px 14px;
+  border-radius:14px;
+  font-weight:800;
+}
+.sec-sp-close{
+  width:42px;
+  height:42px;
+  border-radius:14px;
+  border:2px solid rgba(255,255,255,.35);
+  background:rgba(0,0,0,.22);
+  color:#fff;
+  font-size:20px;
+  line-height:1;
+}
+
+/* Quick message overlay */
+#secQuickMsgOverlay{
+  align-items:center;
+  padding-top:0;
+}
+.sec-qm-box{
+  width:min(92vw, 620px);
+  border-radius:26px;
+  overflow:hidden;
+  background:#fff;
+  color:#111;
+  box-shadow: 0 18px 60px rgba(0,0,0,.35);
+  border: 2px solid rgba(0,0,0,.14);
+}
+.sec-qm-head{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  padding:14px 16px;
+  border-bottom:1px solid rgba(0,0,0,.08);
+}
+.sec-qm-title{
+  font-weight:900;
+  font-size:20px;
+}
+.sec-qm-x{
+  margin-inline-start:auto;
+  width:40px;
+  height:40px;
+  border-radius:14px;
+  border:2px solid rgba(0,0,0,.14);
+  background:rgba(0,0,0,.06);
+  color:#111;
+  font-size:18px;
+}
+.sec-qm-sub{
+  padding:10px 16px 0 16px;
+  opacity:.9;
+  font-weight:700;
+}
+.sec-qm-body{
+  padding:12px 16px 6px 16px;
+}
+
+#secQuickMsgOverlay .leave-msg-label{ color:#111; }
+#secQuickMsgOverlay .leave-msg-textarea{
+  background: rgba(0,0,0,.03);
+  border: 2px solid rgba(0,0,0,.18);
+  color:#111;
+}
+#secQuickMsgOverlay .leave-msg-actions{ padding: 12px 16px 16px 16px; }
+#secQuickMsgOverlay .leave-msg-btn{ border-color: rgba(0,0,0,.18); }
+#secQuickMsgOverlay .leave-msg-btn.secondary{ background: rgba(0,0,0,.06); color:#111; }
+
+
+
+/* Secretary student profile modal (modern) */
+#secSpShell{ background: transparent; }
+#secSpShell .sec-stu-modal{
+  width:100%;
+  min-height:100%;
+  height:100%;
+  max-height:100%;
+  overflow:auto;
+  background: rgba(255,255,255,0.96);
+  color:#0b0b0b;
+  border-radius:0;
+  box-shadow:0 18px 60px rgba(0,0,0,.45);
+  border:1px solid rgba(0,0,0,.10);
+}
+body.theme-night #secSpShell .sec-stu-modal{
+  background: rgba(10,16,14,0.92);
+  color: rgba(255,255,255,0.92);
+  border-color: rgba(255,255,255,.12);
+}
+#secSpShell .sec-stu-hdr{
+  position:sticky; top:0; z-index:1;
+  display:flex; align-items:flex-start; justify-content:space-between;
+  padding:16px 16px 12px;
+  background: linear-gradient(180deg, rgba(46,163,90,.20), rgba(46,163,90,0));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom:1px solid rgba(0,0,0,.08);
+}
+body.theme-night #secSpShell .sec-stu-hdr{ border-bottom-color: rgba(255,255,255,.10); }
+#secSpShell .sec-stu-name{ font-weight:900; font-size:24px; letter-spacing:.2px; }
+#secSpShell .sec-stu-meta{ margin-top:4px; font-size:13px; opacity:.75; }
+#secSpShell .sec-stu-x{
+  width:42px; height:42px; border-radius:14px;
+  border:1px solid rgba(0,0,0,.14);
+  background: rgba(255,255,255,.75);
+}
+body.theme-night #secSpShell .sec-stu-x{
+  border-color: rgba(255,255,255,.14);
+  background: rgba(255,255,255,.08);
+  color: rgba(255,255,255,.90);
+}
+#secSpShell .sec-stu-kpis{
+  display:grid;
+  grid-template-columns: repeat(3, minmax(0,1fr));
+  gap:10px;
+  padding:14px 16px 6px;
+}
+#secSpShell .sec-kpi{
+  border-radius:18px;
+  padding:12px 12px;
+  border:1px solid rgba(0,0,0,.10);
+  background: rgba(255,255,255,.70);
+}
+body.theme-night #secSpShell .sec-kpi{
+  border-color: rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06);
+}
+#secSpShell .sec-kpi .k{ font-size:12px; opacity:.75; }
+#secSpShell .sec-kpi .v{ margin-top:6px; font-size:18px; font-weight:900; }
+#secSpShell .sec-kpi.is-clickable{ cursor:pointer; }
+#secSpShell .sec-kpi.is-clickable:active{ transform: scale(0.99); }
+#secSpShell .sec-stu-cards{ padding: 10px 16px 18px; display:flex; flex-direction:column; gap:12px; }
+#secSpShell .sec-card{
+  border-radius:22px;
+  border:1px solid rgba(0,0,0,.10);
+  background: rgba(255,255,255,.72);
+  padding:14px 14px;
+}
+body.theme-night #secSpShell .sec-card{
+  border-color: rgba(255,255,255,.12);
+  background: rgba(255,255,255,.06);
+}
+#secSpShell .sec-card-title{ font-weight:900; margin-bottom:10px; }
+#secSpShell .sec-grid{ display:grid; grid-template-columns: 1fr; gap:8px; }
+#secSpShell .sec-grid .row{ display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 12px; border-radius:16px; border:1px solid rgba(0,0,0,.08); background: rgba(255,255,255,.60); }
+body.theme-night #secSpShell .sec-grid .row{ border-color: rgba(255,255,255,.10); background: rgba(255,255,255,.05); }
+#secSpShell .sec-grid .k{ font-size:12px; opacity:.78; }
+#secSpShell .sec-grid .v{ font-weight:800; }
+#secSpShell .sec-inline-input{ width: 160px; max-width: 100%; padding:8px 10px; border-radius:12px; border:1px solid rgba(0,0,0,.12); background: rgba(255,255,255,.85); font-weight:900; font-size:14px; color: inherit; }
+body.theme-night #secSpShell .sec-inline-input{ border-color: rgba(255,255,255,.14); background: rgba(255,255,255,.08); color: rgba(255,255,255,.92); }
+
+#secSpShell .sec-test-dt-wrap{ display:flex; gap:10px; align-items:center; justify-content:flex-start; flex-direction:row-reverse; }
+#secSpShell .sec-inline-input.sec-inline-time{ width: 128px; min-width:110px; }
+#secSpShell .sec-actions-row{ display:flex; flex-wrap:wrap; gap:10px; }
+#secSpShell .sec-btn{
+  flex:1 1 140px;
+  border-radius:16px;
+  padding:12px 12px;
+  font-weight:900;
+  border:1px solid rgba(0,0,0,.12);
+  background: rgba(46,163,90,.18);
+}
+body.theme-night #secSpShell .sec-btn{ border-color: rgba(255,255,255,.14); background: rgba(46,163,90,.18); color: rgba(255,255,255,.92); }
+#secSpShell .sec-btn.secondary{ background: rgba(255,255,255,.65); }
+body.theme-night #secSpShell .sec-btn.secondary{ background: rgba(255,255,255,.08); }
+#secSpShell .sec-hint{ margin-top:10px; font-size:12px; opacity:.75; }
+
+@media (max-width: 480px){
+  #secSpShell .sec-stu-kpis{ grid-template-columns: 1fr; }
+}
+
+/* ensure history modals appear above secretary modal */
+#lessonsHistoryModal.sec-history-top,
+#outsideHistoryModal.sec-history-top,
+#secTxHistoryModal.sec-history-top{
+  z-index: 30000 !important;
+}
+
+
+
+
+
+/* Secretary student profile: test time under test date */
+.sp-test-time{
+  font-size: 0.9em;
+  opacity: 0.85;
+  margin-top: 4px;
+}

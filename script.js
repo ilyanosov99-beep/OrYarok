@@ -157,10 +157,56 @@ if(typeof window.fmtMoney !== 'function'){
   };
 }
 
-/* ===== script block 2 (from original HTML) ===== */
-var tapSound=null;
-try{tapSound=new Audio("click.mp3");tapSound.volume=0.5;}catch(e){tapSound=null;}
 
+if(typeof window.fmtDate !== 'function'){
+  window.fmtDate = function(ts){
+    try{
+      // Accept ms number, seconds number, numeric string, or Date-like string
+      var v = ts;
+      if(v && typeof v === 'object'){
+        try{ if(typeof v.toMillis === 'function') v = v.toMillis(); }catch(e){}
+        try{ if(typeof v.toDate === 'function') v = v.toDate().getTime(); }catch(e){}
+        try{
+          if(v && v.seconds != null){
+            var s = parseFloat(v.seconds);
+            if(isFinite(s)){
+              var ms = s*1000;
+              if(v.nanoseconds != null){
+                var ns = parseFloat(v.nanoseconds);
+                if(isFinite(ns)) ms += Math.floor(ns/1e6);
+              }
+              v = ms;
+            }
+          }
+        }catch(e){}
+      }
+      if(typeof v === 'string'){
+        var s = v.trim();
+        if(/^\d+$/.test(s)){
+          var n = parseInt(s,10);
+          v = (s.length <= 10) ? (n*1000) : n;
+        }else{
+          var d0 = new Date(s);
+          var t0 = d0.getTime();
+          if(!isNaN(t0)) v = t0;
+        }
+      }
+      if(typeof v === 'number'){
+        if(v > 0 && v < 1000000000000) v = v*1000; // seconds -> ms
+      }
+      if(typeof window.payFmtDateTime === 'function'){
+        return window.payFmtDateTime(v);
+      }
+      var d = new Date(v||Date.now());
+      var pad = function(x){ x = String(x); return x.length===1?('0'+x):x; };
+      return pad(d.getDate()) + '/' + pad(d.getMonth()+1) + '/' + d.getFullYear() + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    }catch(e){
+      return '';
+    }
+  };
+}
+/* ===== script block 2 (from original HTML) ===== */
+var tapSound=null; /* tap sound asset removed (asset missing) */
 function pressOn(el){
   try{el.classList.add('is-pressed');}catch(e){}
   try{if(navigator.vibrate) navigator.vibrate(20);}catch(e){}
@@ -202,6 +248,44 @@ function reviveOverlayEl(id){
     el.style.display = "";
     el.style.opacity = "";
     el.style.pointerEvents = "";
+    el.style.visibility = "";
+  }catch(e){}
+}
+
+
+function resetMenuState(){
+  try{
+    // Clear transient closing flags so next open animates & renders correctly
+    if(document && document.body){
+      document.body.classList.remove('menu-closing');
+      document.body.classList.remove('student-menu-closing');
+    }
+    // Some Android WebViews keep inline styles after "kill" hacks
+    try{ if(typeof reviveOverlayEl === "function"){
+      reviveOverlayEl('menuScrim');
+  reviveOverlayEl('sideMenu');
+  reviveOverlayEl('menuScroll');
+      reviveOverlayEl('sideMenu');
+      reviveOverlayEl('menuScroll');
+      reviveOverlayEl('studentMenuScrim');
+    reviveOverlayEl('studentMenuLeft');
+    reviveOverlayEl('studentMenuScroll');
+      reviveOverlayEl('studentMenuLeft');
+      reviveOverlayEl('studentMenuScroll');
+    }}catch(e){}
+    // Keep ARIA consistent with DOM state
+    try{
+      var side=document.getElementById('sideMenu');
+      if(side){
+        side.setAttribute('aria-hidden', document.body.classList.contains('menu-open') ? 'false' : 'true');
+      }
+    }catch(e){}
+    try{
+      var sm=document.getElementById('studentMenuLeft');
+      if(sm){
+        sm.setAttribute('aria-hidden', document.body.classList.contains('student-menu-open') ? 'false' : 'true');
+      }
+    }catch(e){}
   }catch(e){}
 }
 
@@ -885,9 +969,6 @@ function goBackStep(){
 function openMotoLocation(){window.open("https://www.google.com/maps?q=31.747240,35.209516","_blank");}
 function openCarLocation(){window.open("https://www.google.com/maps?q=31.748651,35.214261","_blank");}
 function openGreenForm(){window.open("https://govforms.gov.il/mw/forms/RishumTheory@mot.gov.il","_blank");}
-
-function callCars(){window.location.href="tel:0773234451";}
-function callMotorcycles(){window.location.href="tel:0548151477";}
 
 function openWhatsApp(){
   // ברירת מחדל: וואטסאפ לאופנועים
@@ -3659,6 +3740,18 @@ function guessPhone(obj){
     }
     return s;
   }
+  function normClock(v){
+    if(v==null) return "";
+    var s = String(v).trim();
+    if(!s) return "";
+    try{ s = s.replace('.',':'); }catch(e){}
+    var m = s.match(/^(\d{1,2}):(\d{1,2})/);
+    if(!m) return "";
+    var hh = Math.min(23, Math.max(0, parseInt(m[1],10)));
+    var mm = Math.min(59, Math.max(0, parseInt(m[2],10)));
+    return String(hh).padStart(2,'0') + ":" + String(mm).padStart(2,'0');
+  }
+
   function mapProfile(rec, fallbackUser){
     if(!rec || typeof rec !== "object") return null;
     var p = {};
@@ -3687,6 +3780,7 @@ function guessPhone(obj){
 
     p.license = pick(rec, ["license","licenseType","license_type","licenseClass","license_class","type","rishayon","סוגרישיון","רישיון"]);
     p.testDate = normDate(pick(rec, ["testDate","nextTestDate","test_date","next_test_date","test","תאריךלטסט","טסט"]));
+    p.testTime = normClock(pick(rec, ["testTime","testHour","test_time","nextTestTime","next_test_time","שעתטסט","שעהטסט","שעת טסט","שעה_טסט","שעת_טסט"]));
 
     p.lessonsDone = pick(rec, ["lessonsDone","lessonsCompleted","doneLessons","completedLessons","lessons_done","שיעוריםבוצעו","שיעוריםבבוצעו"]);
     p.testsTaken  = pick(rec, ["testsTaken","testsDone","tests","testCount","tests_taken","כמותטסטים","טסטים"]);
@@ -3992,6 +4086,7 @@ try{
     setText("spId", username || "");
     setText("spPhone", "");
     setText("spTestDate", "");
+    setText("spTestTime", "");
     setText("spLessonsDone", "");
     setText("spTestsTaken", "");
     try{ if(typeof window.renderStudentStats === "function") window.renderStudentStats(null, username); }catch(e){}
@@ -4006,6 +4101,10 @@ try{
   setText("spId", profile.id);
   setText("spPhone", profile.phone);
   setText("spTestDate", profile.testDate);
+  // test time may be stored under several legacy keys
+  var _tt = "";
+  try{ _tt = pick(profile, ["testTime","testHour","test_time","שעת טסט","שעה_טסט","שעת_טסט"]); }catch(e){ _tt = profile.testTime || ""; }
+  setText("spTestTime", _tt || "");
   setText("spLessonsDone", profile.lessonsDone);
   setText("spTestsTaken", profile.testsTaken);
 
@@ -4270,6 +4369,21 @@ window.renderStudentStats = function(profile, username){
       }
     }catch(e){}
 
+    // Fallback: local students registry (demo) - saved by signup mirror
+    try{
+      var regRaw = DBStorage.getItem("students_registry_v1");
+      if(regRaw){
+        var reg = JSON.parse(regRaw || "{}") || {};
+        var rec3 = reg && reg[String(u)] ? (reg[String(u)] || {}) : null;
+        if(rec3){
+          var fn3 = rec3.firstName || rec3.first_name || rec3.fname || rec3.firstname || rec3.name || rec3.first || null;
+          if(fn3){
+            fn3 = String(fn3).trim();
+            if(fn3) return fn3.split(/\s+/)[0];
+          }
+        }
+      }
+    }catch(e){}
     return null;
   }
 
@@ -4277,7 +4391,7 @@ window.renderStudentStats = function(profile, username){
     var t = $("studentMenuTitle");
     if(!t) return;
     var fn = (state.loggedIn ? getLoggedFirstName() : null);
-    var name = fn || (state.loggedIn ? (state.username || "אורח") : "אורח");
+    var name = fn || "אורח";
     t.textContent = "ברוך הבא: " + name;
   
     updateEdgeHandles();
@@ -6864,7 +6978,12 @@ closeProfileMenu();
     if(!state.loggedIn) return;
     setStudentTitle();
     cancelEdgeShowTimer();
+    // Android WebView: prevent "blank" menu by resetting transient states + re-syncing role sections
+    try{ if(typeof window.resetMenuState === 'function') window.resetMenuState(); }catch(e){}
+    try{ if(typeof window.updateMenuRoleSections === 'function') window.updateMenuRoleSections(); }catch(e){}
     reviveOverlayEl('studentMenuScrim');
+    reviveOverlayEl('studentMenuLeft');
+    reviveOverlayEl('studentMenuScroll');
     // Only one menu can be open: close the right menu if needed
     try{ if(document.body.classList.contains('menu-open') && typeof window.closeMenu === 'function') window.closeMenu(); }catch(e){}
     document.body.classList.add("student-menu-open");
@@ -6873,6 +6992,9 @@ closeProfileMenu();
 
     var menu = $("studentMenuLeft");
     if(menu) menu.setAttribute("aria-hidden","false");
+
+    // Force a reflow so menu contents paint reliably on first open (Android WebView)
+    try{ var _sc = $("studentMenuScroll"); if(_sc) void _sc.offsetHeight; }catch(e){}
 
     // animate buttons (reuse menu-in class)
     var items = menu ? menu.querySelectorAll(".menu-item") : [];
@@ -10630,6 +10752,27 @@ if(lessonFilesList){
       closeProfileCard();
       hideQuickHit();
     });
+    // Balance click -> transactions history by tz (admin/manager profiles)
+    try{
+      if(rBalanceMoney && !rBalanceMoney.__txBound){
+        rBalanceMoney.__txBound = 1;
+        const _openTx = (e) => {
+          try{ if(e){ e.preventDefault(); e.stopPropagation(); } }catch(_){}
+          const tz = normalizeTz((rTz && rTz.textContent) || selectedSearchTz || '');
+          if(!tz) return;
+          try{
+            if(typeof window.openTransactionsHistoryByTz === 'function') window.openTransactionsHistoryByTz(tz, 'היסטוריית עסקאות לפי ת״ז ' + tz);
+            else if(typeof window.secOpenTransactionsHistoryFromModal === 'function'){
+              try{ window.__profileViewTz = tz; }catch(_e){}
+              window.secOpenTransactionsHistoryFromModal();
+            }
+          }catch(_e){}
+        };
+        if(typeof bindReleaseTap === 'function') bindReleaseTap(rBalanceMoney, _openTx);
+        else rBalanceMoney.addEventListener('click', _openTx);
+      }
+    }catch(e){}
+
 
     // Delegated actions (table)
 // Touch-friendly: action happens ONLY on release on the same button (prevents accidental opens while scrolling)
@@ -11168,7 +11311,7 @@ document.addEventListener('input', (e) => {
               tz: String(tz),
               lessonsDone: prof.lessonsDone,
               due: (payObj && payObj.due != null ? payObj.due : prev.due)
-            });
+            }, (tNorm ? { testTime: tNorm, testHour: tNorm, test_time: tNorm, 'שעת טסט': tNorm, 'שעה_טסט': tNorm, 'שעת_טסט': tNorm } : {}));
             DBStorage.setItem("students_registry_v1", JSON.stringify(reg));
           }
         }
@@ -12793,10 +12936,693 @@ function renderSecretaryStudentResults(q){
     try{ closeMenu(); }catch(e){}
     try{ closeProfileMenu(); }catch(e){}
     try{ closePopup(true); }catch(e){}
-    try{ openPage("studentProfilePage", true); }catch(e){}
+    try{ openSecStudentProfileModal(tz); }catch(e){}
   }
 
-  function secretarySearchBind(){
+  
+  // =========================
+  // Secretary: Student Profile as MODAL (custom UI)
+  // =========================
+  (function(){
+    function _secNormTz(tz){
+      tz = normStr(tz);
+      if(!tz) return "";
+      try{ if(typeof normalizeTz === "function") return normalizeTz(tz); }catch(e){}
+      return String(tz).replace(/\D/g,"").trim();
+    }
+
+    function _secGetActiveProf(tz){
+      try{ return getStudentProfile(tz) || {}; }catch(e){ return {}; }
+    }
+
+    function _secMoney(v){
+      try{
+        if(v==null || v==="") return "—";
+        var n = Number(v);
+        if(!isFinite(n)) return String(v);
+        return "₪" + Math.round(n).toString();
+      }catch(e){ return String(v||"—"); }
+    }
+
+    function _secBuildModalHtml(tz){
+      var prof = _secGetActiveProf(tz);
+      var name = pickStudentName(tz, prof) || "תלמיד";
+      var phone = normStr(prof.phone || prof.mobile || prof.tel || "");
+      var license = normStr(prof.licenseType || prof.license || "");
+      var lessonsDone = (prof.lessonsDone!=null ? String(prof.lessonsDone) : normStr(prof.completedLessons || ""));
+      if(!lessonsDone) lessonsDone = "—";
+      var outsideDone = "—";
+      try{
+        if(prof && typeof prof === "object"){
+          if(prof.outsideCount != null) outsideDone = String(prof.outsideCount);
+          else if(Array.isArray(prof.outsideLog)) outsideDone = String(prof.outsideLog.length);
+          else if(prof.outsideDone != null) outsideDone = String(prof.outsideDone);
+        }
+      }catch(e){}
+      if(!outsideDone) outsideDone = "—";
+      var bal = "—";
+      try{
+        if(typeof FinanceAPI !== "undefined" && FinanceAPI && typeof FinanceAPI.getStudentBalance === "function"){
+          var b = FinanceAPI.getStudentBalance(tz);
+          if(b && typeof b === "object" && b.balance != null) bal = _secMoney(b.balance);
+          else if(b != null) bal = _secMoney(b);
+        }else{
+          // fallback: existing rendered field if present
+          bal = _secMoney(prof.balanceMoney || prof.balance || prof.money || "");
+        }
+      }catch(e){}
+
+      var testDate = normStr(prof.testDate || prof.test || prof.test_date || "");
+      if(!testDate) testDate = "—";
+
+      var testTime = normStr(prof.testTime || prof.testHour || prof.test_time || prof['שעת טסט'] || prof['שעה_טסט'] || "");
+      return '' +
+        '<div class="sec-stu-modal" role="dialog" aria-modal="true">' +
+          '<div class="sec-stu-hdr">' +
+            '<div class="sec-stu-title">' +
+              '<div class="sec-stu-name">'+esc(name)+'</div>' +
+              '<div class="sec-stu-meta">ת״ז '+esc(tz) + (phone?(' · '+esc(phone)):'') + '</div>' +
+            '</div>' +
+            '<button type="button" class="sec-stu-x tap" data-tap="" aria-label="סגור" onclick="closeSecStudentProfileModal()">✕</button>' +
+          '</div>' +
+
+          '<div class="sec-stu-kpis">' +
+            '<div class="sec-kpi is-clickable tap" data-tap="" role="button" tabindex="0" data-sec-act="openTxHistory"><div class="k">יתרה</div><div class="v">'+esc(bal)+'</div></div>' +
+            '<div class="sec-kpi is-clickable tap" data-tap="" role="button" tabindex="0" onclick="secOpenLessonsHistoryFromModal()"><div class="k">שיעורים שבוצעו</div><div class="v">'+esc(lessonsDone)+'</div></div>' +
+            '<div class="sec-kpi is-clickable tap" data-tap="" role="button" tabindex="0" onclick="secOpenOutsideHistoryFromModal()"><div class="k">שיעורי חוץ</div><div class="v">'+esc(outsideDone)+'</div></div>' +
+            '<div class="sec-kpi"><div class="k">סוג רישיון</div><div class="v">'+esc(license||"—")+'</div></div>' +
+          '</div>' +
+
+          '<div class="sec-stu-cards">' +
+            '<div class="sec-card">' +
+              '<div class="sec-card-title">פרטים</div>' +
+              '<div class="sec-grid">' +
+                '<div class="row"><div class="k">שם</div><div class="v">'+esc(name)+'</div></div>' +
+                '<div class="row"><div class="k">ת״ז</div><div class="v">'+esc(tz)+'</div></div>' +
+                '<div class="row"><div class="k">טלפון</div><div class="v">'+esc(phone||"—")+'</div></div>' +
+                '<div class="row"><div class="k">תאריך לטסט</div><div class="v"><div class="sec-test-dt-wrap"><input id="secTestDateInput" class="sec-inline-input" type="date" inputmode="numeric" /><input id="secTestTimeInput" class="sec-inline-input sec-inline-time" type="time" inputmode="numeric" /></div></div></div>' +
+              '</div>' +
+            '</div>' +
+
+            '<div class="sec-card">' +
+              '<div class="sec-card-title">סטטוס והתקדמות</div>' +
+              '<div class="sec-actions-row">' +
+                '<button type="button" class="sec-btn tap" data-tap="" onclick="secOpenQuickMessage(\''+esc(tz)+'\')">שלח הודעה</button>' +
+                
+              '</div>' +
+                          '</div>' +
+          '</div>' +
+        '</div>';
+    }
+
+    window.openSecStudentProfileModal = function(tz){
+      tz = _secNormTz(tz);
+      if(!tz) return;
+
+      // set active student context
+      try{ window.__profileViewTz = tz; }catch(e){}
+      try{ if(window.APP_STATE) window.APP_STATE.activeStudentTz = tz; }catch(e){}
+      try{ window.__activeStudentTz = tz; }catch(e){}
+
+      var overlay = document.getElementById("secStudentProfileOverlay");
+      var shell = document.getElementById("secSpShell");
+      if(!overlay || !shell) return;
+
+      // render custom UI
+      try{ shell.innerHTML = _secBuildModalHtml(tz); }catch(e){ shell.innerHTML = ""; }
+      // wire balance KPI opener (no inline onclick; WebView-safe)
+      try{
+        var balKpi = shell.querySelector('[data-sec-act="openTxHistory"]');
+        if(balKpi && !balKpi.__txKpiBound){
+          balKpi.__txKpiBound = 1;
+          var _openTx = function(e){
+            try{ if(e){ e.preventDefault(); e.stopPropagation(); } }catch(_){}
+            try{ if(typeof window.secOpenTransactionsHistoryFromModal === 'function') window.secOpenTransactionsHistoryFromModal(); }catch(_e){}
+          };
+          if(typeof window.bindReleaseTap === 'function') window.bindReleaseTap(balKpi, _openTx);
+          else balKpi.addEventListener('click', _openTx);
+        }
+      }catch(e){}
+
+      // init editable fields
+      try{
+        var inp = shell.querySelector('#secTestDateInput');
+        var tInp = shell.querySelector('#secTestTimeInput');
+        if(inp){
+          var p = _secGetActiveProf(tz) || {};
+          var td = normStr(p.testDate || p.test || p.test_date || p['תאריך טסט'] || p['תאריך_טסט'] || "");
+          inp.value = _secToInputDate(td);
+          if(tInp){
+            var tt = normStr(p.testTime || p.testHour || p.test_time || p['שעת טסט'] || p['שעה_טסט'] || "");
+            tInp.value = _secNormTime(tt);
+          }
+          inp.onchange = function(){ try{ secSaveTestDateTimeFromModal(this.value, (tInp?tInp.value:"") ); }catch(e){} };
+          inp.onblur = function(){ try{ secSaveTestDateTimeFromModal(this.value, (tInp?tInp.value:"") ); }catch(e){} };
+        }
+        if(tInp){
+          tInp.onchange = function(){ try{ secSaveTestDateTimeFromModal((inp?inp.value:""), this.value); }catch(e){} };
+          tInp.onblur = function(){ try{ secSaveTestDateTimeFromModal((inp?inp.value:""), this.value); }catch(e){} };
+        }
+      }catch(e){}
+
+      // open overlay
+      try{ openOverlay(overlay); }catch(e){ try{ overlay.classList.add("show"); }catch(_e){} }
+    };
+
+    window.closeSecStudentProfileModal = function(){
+      var overlay = document.getElementById("secStudentProfileOverlay");
+      var shell = document.getElementById("secSpShell");
+      try{ closeOverlay(overlay); }catch(e){ try{ if(overlay) overlay.classList.remove("show"); }catch(_e){} }
+      try{ if(shell) shell.innerHTML = ""; }catch(e){}
+      try{ closeOverlay("secQuickMsgOverlay"); }catch(e){}
+    };
+
+    // Open history above the secretary modal
+    window.secOpenLessonsHistoryFromModal = function(){
+      try{
+        var m = document.getElementById('lessonsHistoryModal');
+        if(m) m.classList.add('sec-history-top');
+      }catch(e){}
+      try{ if(window.openLessonsHistory) window.openLessonsHistory(); }catch(e){}
+    };
+    window.secOpenOutsideHistoryFromModal = function(){
+      try{
+        var m = document.getElementById('outsideHistoryModal');
+        if(m) m.classList.add('sec-history-top');
+      }catch(e){}
+      try{ if(window.openOutsideHistory) window.openOutsideHistory(); }catch(e){}
+    };
+
+
+    
+
+    // Ensure transactions history modal is wired (close button + backdrop) in a WebView-safe way.
+    // This must work across Admin / Secretary / Student contexts.
+    window.ensureSecTxHistoryModalBindings = function(){
+      try{
+        var modal = document.getElementById('secTxHistoryModal');
+        if(!modal) return;
+
+        function _close(){
+          try{
+            modal.classList.remove('show');
+            modal.setAttribute('aria-hidden','true');
+          }catch(e){}
+        }
+
+        // Close button
+        try{
+          var cbtn = document.getElementById('secTxHistoryClose');
+          if(cbtn && !cbtn.__txCloseBound){
+            cbtn.__txCloseBound = 1;
+            if(typeof window.bindReleaseTap === 'function'){
+              try{ window.bindReleaseTap(cbtn, _close); }
+              catch(e){ try{ cbtn.addEventListener('click', _close); }catch(_e){} }
+            }else{
+              try{ cbtn.addEventListener('click', _close); }catch(e){}
+            }
+          }
+        }catch(e){}
+
+        // Backdrop click closes (only if clicking the backdrop itself)
+        try{
+          if(!modal.__txBackdropBound){
+            modal.__txBackdropBound = 1;
+            var _maybeClose = function(e){
+              try{
+                if(!e) return;
+                if(e.target !== modal) return;
+                _close();
+              }catch(_e){}
+            };
+            if(typeof window.bindReleaseTap === 'function'){
+              try{ window.bindReleaseTap(modal, _maybeClose); }
+              catch(e){ try{ modal.addEventListener('click', _maybeClose); }catch(_e){} }
+            }else{
+              try{ modal.addEventListener('click', _maybeClose); }catch(e){}
+            }
+          }
+        }catch(e){}
+      }catch(e){}
+    };
+
+    // Wire once on load as well
+    try{ document.addEventListener('DOMContentLoaded', function(){ try{ window.ensureSecTxHistoryModalBindings && window.ensureSecTxHistoryModalBindings(); }catch(e){} }); }catch(e){}
+    try{ window.addEventListener('pageshow', function(){ try{ setTimeout(function(){ try{ window.ensureSecTxHistoryModalBindings && window.ensureSecTxHistoryModalBindings(); }catch(e){} }, 80); }catch(e){} }); }catch(e){}
+
+    // Global transactions history (by tz) - used by all profiles
+    if(!window.openTransactionsHistoryByTz){
+      window.openTransactionsHistoryByTz = function(tz, subtitle){
+        try{ tz = String(tz||''); }catch(e){ tz = ''; }
+        tz = tz.replace(/\D/g,'').slice(0, 9);
+        if(!tz) return;
+
+        var modal = null;
+        try{ modal = document.getElementById('secTxHistoryModal'); }catch(e){}
+        if(!modal) return;
+
+        try{ window.ensureSecTxHistoryModalBindings && window.ensureSecTxHistoryModalBindings(); }catch(e){}
+
+        try{ modal.classList.add('sec-history-top'); }catch(e){}
+
+        var tbody = null, sub = null;
+        try{ tbody = document.getElementById('secTxHistoryTbody'); }catch(e){}
+        try{ sub = document.getElementById('secTxHistorySub'); }catch(e){}
+        try{ if(tbody) tbody.innerHTML = ''; }catch(e){}
+        try{ if(sub) sub.textContent = subtitle || ('רשימת העסקאות לפי ת״ז ' + tz); }catch(e){}
+
+        var ledger = [];
+        try{
+          var payObj = null;
+          try{
+            payObj = (window.DB && DB.get && DB.key && DB.key.studentPayments) ? DB.get(DB.key.studentPayments(tz), null) : null;
+          }catch(e){}
+          if(!payObj){
+            try{
+              var raw = localStorage.getItem('student_payments_' + tz);
+              if(raw) payObj = JSON.parse(raw);
+            }catch(e){}
+          }
+          if(payObj && typeof payObj === 'object' && Array.isArray(payObj.ledger)) ledger = payObj.ledger.slice();
+        }catch(e){ ledger = []; }
+
+
+        function _txMs(v){
+          try{
+            if(v == null) return 0;
+            if(typeof v === 'number'){
+              if(v > 0 && v < 1000000000000) return v * 1000; // seconds -> ms
+              return v;
+            }
+            var s = String(v||'').trim();
+            if(!s) return 0;
+            if(/^\d+$/.test(s)){
+              var n = parseInt(s, 10);
+              if(s.length <= 10) return n * 1000; // seconds
+              return n; // ms
+            }
+            var d = new Date(s);
+            var t = d.getTime();
+            return isNaN(t) ? 0 : t;
+          }catch(e){ return 0; }
+        }
+
+        function _firstDefined(obj, keys){
+          try{
+            for(var i=0;i<keys.length;i++){
+              var k = keys[i];
+              if(obj && Object.prototype.hasOwnProperty.call(obj, k) && obj[k] != null) return obj[k];
+            }
+          }catch(e){}
+          return null;
+        }
+
+        function _pickTs(it){
+          try{
+            if(!it || typeof it !== 'object') return 0;
+
+            var keys = ['ts','t','timeMs','timestamp','createdAt','created_at','created','at','when','datetime','dateTime','date_time','date','time'];
+            var v = _firstDefined(it, keys);
+            if(v != null) return v;
+
+            var meta = it.meta || it.info || it.data || it.extra || null;
+            if(meta && typeof meta === 'object'){
+              v = _firstDefined(meta, keys);
+              if(v != null) return v;
+            }
+
+            var id = it.id || it.transactionId || it.txId || it.paymentId || it.ref || '';
+            id = String(id||'');
+            var mm = id.match(/(\d{10,13})/);
+            if(mm && mm[1]) return mm[1];
+
+            return 0;
+          }catch(e){ return 0; }
+        }
+        try{
+          ledger.sort(function(a,b){
+            var ta = 0, tb = 0;
+            try{ ta = _txMs(_pickTs(a)); }catch(e){ ta = 0; }
+            try{ tb = _txMs(_pickTs(b)); }catch(e){ tb = 0; }
+            return tb - ta;
+          });
+        }catch(e){} 
+
+        if(tbody){
+          if(!ledger.length){
+            tbody.innerHTML = '<tr><td colspan="4" style="opacity:.75; text-align:center; padding:14px;">אין עסקאות</td></tr>';
+          }else{
+            var html = '';
+            for(var i=0;i<ledger.length;i++){
+              var it = ledger[i] || {};
+              var tsRaw = _pickTs(it);
+              var tsMs = _txMs(tsRaw);
+              var d = '';
+              try{ d = fmtDate(tsMs || tsRaw); }catch(e){ d = ''; }
+              var type = normStr(it.type || it.kind || it.action || '') || '—';
+              var note = normStr(it.note || it.desc || it.description || '') || '—';
+              var amt = it.amount;
+              var amtText = '';
+              try{ amtText = fmtMoney(amt); }catch(e){ amtText = String(amt!=null?amt:'—'); }
+              html += '<tr>' +
+                        '<td class="k">'+esc(d||'—')+'</td>' +
+                        '<td class="k">'+esc(type)+'</td>' +
+                        '<td class="k" style="font-weight:900;">'+esc(amtText)+'</td>' +
+                        '<td class="k">'+esc(note)+'</td>' +
+                      '</tr>';
+            }
+            tbody.innerHTML = html;
+          }
+        }
+
+        try{
+          if(window.openModal) window.openModal(modal);
+          else modal.classList.add('show');
+        }catch(e){}
+      };
+    }
+
+
+    // Wire balance fields to open transactions modal (no inline onclick; Android WebView safe)
+    (function(){
+      function _normTzFromCtx(fallback){
+        var tz = '';
+        try{
+          tz = String(window.__profileViewTz || window.__activeStudentTz || (window.APP_STATE && window.APP_STATE.activeStudentTz) || fallback || '');
+        }catch(e){ tz = String(fallback||''); }
+        try{ if(typeof normalizeTz === 'function') tz = normalizeTz(tz); }catch(e){}
+        tz = String(tz||'').replace(/\D/g,'').slice(0,9);
+        return tz;
+      }
+      function _bind(el, getFallback){
+        if(!el) return;
+        if(el.__txClickBound || el.__txBound) return;
+        el.__txClickBound = 1;
+        try{ el.classList && el.classList.add('tx-clickable'); }catch(e){}
+        var fn = function(e){
+          try{ if(e){ e.preventDefault(); e.stopPropagation(); } }catch(_){}
+          var fb = '';
+          try{ fb = (typeof getFallback === 'function') ? getFallback() : String(getFallback||''); }catch(_e){ fb = ''; }
+          var tz = _normTzFromCtx(fb);
+          if(!tz) return;
+          try{ if(typeof window.openTransactionsHistoryByTz === 'function') window.openTransactionsHistoryByTz(tz, 'עסקאות אחרונות לפי ת״ז ' + tz); }catch(_e){}
+        };
+        try{
+          if(typeof bindReleaseTap === 'function') bindReleaseTap(el, fn);
+          else el.addEventListener('click', fn);
+        }catch(e){}
+      }
+      function wire(){
+        try{ _bind(document.getElementById('btBalance')); }catch(e){}
+        try{ _bind(document.getElementById('shopCreditBalance')); }catch(e){}
+      }
+      try{ wire(); }catch(e){}
+      try{ document.addEventListener('DOMContentLoaded', wire); }catch(e){}
+      try{ window.addEventListener('pageshow', function(){ try{ setTimeout(wire, 60); }catch(e){} }); }catch(e){}
+      try{ window.wireTransactionsBalanceOpeners = wire; }catch(e){}
+    })();
+
+window.secOpenTransactionsHistoryFromModal = function(){
+      var tz = '';
+      try{ tz = String(window.__profileViewTz || window.__activeStudentTz || (window.APP_STATE && window.APP_STATE.activeStudentTz) || ''); }catch(e){}
+      tz = _secNormTz(tz);
+      if(!tz) return;
+
+      try{ window.ensureSecTxHistoryModalBindings && window.ensureSecTxHistoryModalBindings(); }catch(e){}
+
+      // Delegate to global transactions history renderer
+      try{ if(typeof window.openTransactionsHistoryByTz === 'function'){ window.openTransactionsHistoryByTz(tz, 'רשימת העסקאות של התלמיד.'); return; } }catch(e){}
+try{
+        var modal = document.getElementById('secTxHistoryModal');
+        if(modal) modal.classList.add('sec-history-top');
+      }catch(e){}
+
+      try{
+        var tbody = document.getElementById('secTxHistoryTbody');
+        if(tbody) tbody.innerHTML = '';
+        var sub = document.getElementById('secTxHistorySub');
+        if(sub) sub.textContent = 'רשימת העסקאות של התלמיד.';
+
+        var payObj = null;
+        try{ payObj = (window.DB && DB.get && DB.key && DB.key.studentPayments) ? DB.get(DB.key.studentPayments(tz), null) : null; }catch(e){}
+        if(!payObj || typeof payObj !== 'object') payObj = {};
+        var ledger = Array.isArray(payObj.ledger) ? payObj.ledger.slice() : [];
+        ledger.sort(function(a,b){
+          var ta = (a && a.ts != null ? a.ts : 0);
+          var tb = (b && b.ts != null ? b.ts : 0);
+          return tb - ta;
+        });
+
+        if(tbody){
+          if(!ledger.length){
+            tbody.innerHTML = '<tr><td colspan="4" style="opacity:.75; text-align:center; padding:14px;">אין עסקאות</td></tr>';
+          }else{
+            var html = '';
+            for(var i=0;i<ledger.length;i++){
+              var it = ledger[i] || {};
+              var ts = it.ts != null ? it.ts : (it.date || it.time || 0);
+              var d = '';
+              try{ d = fmtDate(ts); }catch(e){ d = ''; }
+              var type = normStr(it.type || it.kind || it.action || '') || '—';
+              var note = normStr(it.note || it.desc || it.description || '') || '—';
+              var amt = it.amount;
+              var amtText = '';
+              try{ amtText = fmtMoney(amt); }catch(e){ amtText = String(amt!=null?amt:'—'); }
+              html += '<tr>' +
+                        '<td class="k">'+esc(d||'—')+'</td>' +
+                        '<td class="k">'+esc(type)+'</td>' +
+                        '<td class="k" style="font-weight:900;">'+esc(amtText)+'</td>' +
+                        '<td class="k">'+esc(note)+'</td>' +
+                      '</tr>';
+            }
+            tbody.innerHTML = html;
+          }
+        }
+
+        try{
+          var m = document.getElementById('secTxHistoryModal');
+          if(m && window.openModal) window.openModal(m);
+        }catch(e){}
+      }catch(e){}
+    };
+
+    // Convert stored date formats to YYYY-MM-DD for <input type="date">
+    function _secToInputDate(v){
+      v = normStr(v);
+      if(!v) return '';
+      var m = v.match(/^(\d{4})-(\d{2})-(\d{2})/);
+      if(m) return m[1]+'-'+m[2]+'-'+m[3];
+      m = v.match(/^(\d{2})[\.\/\-](\d{2})[\.\/\-](\d{4})/);
+      if(m) return m[3]+'-'+m[2]+'-'+m[1];
+      m = v.match(/^(\d{2})[\.\/\-](\d{2})[\.\/\-](\d{2})/);
+      if(m){
+        var yy = parseInt(m[3],10);
+        if(yy < 100) yy = 2000 + yy;
+        return String(yy).padStart(4,'0')+'-'+m[2]+'-'+m[1];
+      }
+      return '';
+    }
+
+    function _secNormTime(v){
+      v = normStr(v);
+      if(!v) return '';
+      try{ v = v.replace('.',':'); }catch(e){}
+      var m = v.match(/^(\d{1,2}):(\d{2})/);
+      if(!m) return '';
+      var hh = Math.min(23, Math.max(0, parseInt(m[1],10)));
+      var mm = Math.min(59, Math.max(0, parseInt(m[2],10)));
+      return String(hh).padStart(2,'0') + ':' + String(mm).padStart(2,'0');
+    }
+
+    function secSaveTestDateTimeFromModal(dateVal, timeVal){
+      // Backward compatible: if timeVal not provided, try read from input.
+      try{ if(timeVal == null){ var ti = document.getElementById('secTestTimeInput'); if(ti) timeVal = ti.value; } }catch(e){}
+      var tNorm = _secNormTime(timeVal || '');
+      // Save date (existing behavior)
+      try{ secSaveTestDateFromModal(dateVal); }catch(e){}
+
+      var tz = '';
+      try{ tz = String(window.__profileViewTz || window.__activeStudentTz || (window.APP_STATE && window.APP_STATE.activeStudentTz) || ''); }catch(e){}
+      tz = _secNormTz(tz);
+      if(!tz) return;
+
+      try{
+        var prof = getStudentProfile(tz) || {};
+        prof.testTime = tNorm;
+        prof.testHour = tNorm;
+        prof.test_time = tNorm;
+        prof['שעת טסט'] = tNorm;
+        prof['שעה_טסט'] = tNorm;
+        setStudentProfile(tz, prof);
+      }catch(e){}
+
+      // Keep registry consistent (demo)
+      try{
+        var regRaw = DBStorage.getItem('students_registry_v1');
+        if(regRaw){
+          var reg = JSON.parse(regRaw);
+          if(Array.isArray(reg)){
+            for(var i=0;i<reg.length;i++){
+              var r = reg[i];
+              if(!r || typeof r !== 'object') continue;
+              var z = r.tz || r.id || r.userId || r.username || r.user || r.uid || r.teudatZehut || r['תז'] || r['ת"ז'] || r['ת״ז'];
+              if(z != null && String(z) === String(tz)){
+                reg[i] = Object.assign({}, r, { testTime: tNorm, testHour: tNorm, test_time: tNorm, 'שעת טסט': tNorm, 'שעה_טסט': tNorm }, (tNorm ? { testTime: tNorm, testHour: tNorm, test_time: tNorm, 'שעת טסט': tNorm, 'שעה_טסט': tNorm, 'שעת_טסט': tNorm } : {}));
+                break;
+              }
+            }
+            DBStorage.setItem('students_registry_v1', JSON.stringify(reg));
+          }else if(reg && typeof reg === 'object'){
+            var key = String(tz);
+            var prev = reg[key] && typeof reg[key] === 'object' ? reg[key] : {};
+            reg[key] = Object.assign({}, prev, { tz: String(tz), testTime: tNorm, testHour: tNorm, test_time: tNorm, 'שעת טסט': tNorm, 'שעה_טסט': tNorm });
+            DBStorage.setItem('students_registry_v1', JSON.stringify(reg));
+          }
+        }
+      }catch(e){}
+    }
+
+    function secSaveTestDateFromModal(inputVal){
+      var tz = '';
+      try{ tz = String(window.__profileViewTz || window.__activeStudentTz || (window.APP_STATE && window.APP_STATE.activeStudentTz) || ''); }catch(e){}
+      tz = _secNormTz(tz);
+      if(!tz) return;
+
+      var v = normStr(inputVal || '');
+      // keep only YYYY-MM-DD if provided
+      try{
+        if(v && !/^\d{4}-\d{2}-\d{2}$/.test(v)){
+          v = _secToInputDate(v) || v;
+        }
+      }catch(e){}
+
+      try{
+        var prof = getStudentProfile(tz) || {};
+        prof.testDate = v;
+        prof.test = v;
+        prof.test_date = v;
+        prof['תאריך טסט'] = v;
+        prof['תאריך_טסט'] = v;
+        setStudentProfile(tz, prof);
+      }catch(e){}
+
+      // Also save test time if provided (do not overwrite existing time with empty)
+      var tNorm = "";
+      try{
+        var ti = document.getElementById('secTestTimeInput');
+        if(ti) tNorm = _secNormTime(ti.value || "");
+      }catch(e){ tNorm = ""; }
+
+      if(tNorm){
+        try{
+          var prof2 = getStudentProfile(tz) || {};
+          prof2.testTime = tNorm;
+          prof2.testHour = tNorm;
+          prof2.test_time = tNorm;
+          prof2['שעת טסט'] = tNorm;
+          prof2['שעה_טסט'] = tNorm;
+          prof2['שעת_טסט'] = tNorm;
+          setStudentProfile(tz, prof2);
+        }catch(e){}
+      }
+
+
+      // Keep registry consistent (demo)
+      try{
+        var regRaw = DBStorage.getItem('students_registry_v1');
+        if(regRaw){
+          var reg = JSON.parse(regRaw);
+          if(Array.isArray(reg)){
+            for(var i=0;i<reg.length;i++){
+              var r = reg[i];
+              if(!r || typeof r !== 'object') continue;
+              var z = r.tz || r.id || r.userId || r.username || r.user || r.uid || r.teudatZehut || r['תז'] || r['ת"ז'];
+              if(z != null && String(z) === String(tz)){
+                reg[i] = Object.assign({}, r, { testDate: v, test: v, test_date: v, 'תאריך טסט': v, 'תאריך_טסט': v });
+                break;
+              }
+            }
+            DBStorage.setItem('students_registry_v1', JSON.stringify(reg));
+          }else if(reg && typeof reg === 'object'){
+            var key = String(tz);
+            var prev = reg[key] && typeof reg[key] === 'object' ? reg[key] : {};
+            reg[key] = Object.assign({}, prev, { tz: String(tz), testDate: v, test: v, test_date: v, 'תאריך טסט': v, 'תאריך_טסט': v });
+            DBStorage.setItem('students_registry_v1', JSON.stringify(reg));
+          }
+        }
+      }catch(e){}
+
+      // If student profile UI is currently open for this tz, refresh test label immediately
+      try{
+        var active = (window.__activeStudentTz || (window.APP_STATE && window.APP_STATE.activeStudentTz) || '');
+        if(String(active) === String(tz)){
+          var el = document.getElementById('spTestDate');
+          if(el) el.textContent = v || '';
+          // refresh time too (avoid undefined vars, read from stored profile)
+          var elt = document.getElementById('spTestTime');
+          if(elt){
+            var p2 = null;
+            try{ p2 = (typeof getStudentProfile === 'function') ? getStudentProfile(tz) : null; }catch(e){ p2 = null; }
+            var t2 = '';
+            try{ t2 = (p2 && typeof p2 === 'object') ? (p2.testTime || p2.testHour || p2.test_time || p2['שעת טסט'] || p2['שעה_טסט'] || p2['שעת_טסט'] || '') : ''; }catch(e){ t2=''; }
+            elt.textContent = t2 || '';
+          }
+          var st = document.getElementById('spTestStatus');
+          if(st){
+            if(v) st.textContent = 'טסט נקבע ל: ' + v;
+            else st.textContent = 'אין טסט נקבע כרגע';
+          }
+        }
+      }catch(e){}
+    }
+
+
+    // quick message (no search, direct tz)
+    window.secOpenQuickMessage = function(tz){
+      tz = _secNormTz(tz);
+      if(!tz) return;
+      try{ window.__secQmTz = tz; }catch(e){}
+      try{
+        var p = _secGetActiveProf(tz) || {};
+        var name = pickStudentName(tz, p) || "";
+        var line = document.getElementById("secQmToLine");
+        if(line) line.textContent = "ל: " + (name ? (name + " · ") : "") + "ת״ז " + tz;
+      }catch(e){}
+      try{
+        var ta = document.getElementById("secQmMsg");
+        if(ta){ ta.value = ""; ta.focus(); }
+      }catch(e){}
+      try{ openOverlay("secQuickMsgOverlay"); }catch(e){}
+    };
+
+    window.secSendQuickMessage = function(){
+      var tz = "";
+      try{ tz = _secNormTz(window.__secQmTz || ""); }catch(e){}
+      if(!tz) return;
+
+      var msg = "";
+      try{ msg = normStr((document.getElementById("secQmMsg")||{}).value||""); }catch(e){}
+      if(!msg){
+        try{ showToast("כתוב הודעה לפני שליחה"); }catch(e){}
+        return;
+      }
+
+      try{
+        if(typeof window.sendPrivateMessage === "function"){
+          window.sendPrivateMessage(tz, "הודעה מהמזכירה", msg);
+          showToast("נשלח לתלמיד");
+        }else{
+          showToast("שגיאה בשליחה");
+        }
+      }catch(e){
+        try{ showToast("שגיאה בשליחה"); }catch(_e){}
+      }
+
+      try{ closeOverlay("secQuickMsgOverlay"); }catch(e){}
+    };
+  })();
+
+function secretarySearchBind(){
     var input = $("secStudentSearch");
     var resEl = $("secStudentResults");
     if(input && !input.__secBound){
@@ -13348,113 +14174,6 @@ function openCashView(type){
 
   // -------- Bind --------
   
-/* === TAP BINDING (GLOBAL) === */
-function bindTap(el, fn){
-  if(!el) return;
-  try{
-    if(el.getAttribute && el.getAttribute("data-tapbound") === "1") return;
-    el.setAttribute && el.setAttribute("data-tapbound","1");
-  }catch(e){}
-  var down=false, moved=false, sx=0, sy=0, last=0;
-
-  function pt(e){
-    try{
-      if(e && e.changedTouches && e.changedTouches[0]) return e.changedTouches[0];
-      if(e && e.touches && e.touches[0]) return e.touches[0];
-    }catch(_){}
-    return e || {};
-  }
-
-  function onDown(e){
-    down=true; moved=false;
-    var p = pt(e);
-    sx = p.clientX || 0;
-    sy = p.clientY || 0;
-  }
-
-  function onMove(e){
-    if(!down) return;
-    var p = pt(e);
-    var dx = Math.abs((p.clientX||0) - sx);
-    var dy = Math.abs((p.clientY||0) - sy);
-    if(dx > 10 || dy > 10) moved=true;
-  }
-
-  function cancel(){ down=false; }
-
-  function fire(e){
-    if(!down) return;
-    down=false;
-    if(moved) return;
-    var now = Date.now();
-    if(now - last < 250) return;
-    last = now;
-    try{ if(e && e.preventDefault) e.preventDefault(); }catch(_){}
-    try{ if(e && e.stopPropagation) e.stopPropagation(); }catch(_){}
-    try{ if(e && e.stopImmediatePropagation) e.stopImmediatePropagation(); }catch(_){}
-    try{ fn && fn(e); }catch(err){}
-    return false;
-  }
-
-  try{ el.style && (el.style.touchAction = "manipulation"); }catch(e){}
-    // Visual press effect (for left/profile menu and other tap elements)
-    function _pressOn(){
-      try{ el.classList && el.classList.add("is-pressed"); }catch(_){}
-    }
-    function _pressOff(){
-      try{ el.classList && el.classList.remove("is-pressed"); }catch(_){}
-    }
-    // Ensure release always clears press state
-    try{
-      el.addEventListener("pointerup", _pressOff, true);
-      el.addEventListener("pointercancel", _pressOff, true);
-      el.addEventListener("touchend", _pressOff, true);
-      el.addEventListener("touchcancel", _pressOff, true);
-      el.addEventListener("mouseup", _pressOff, true);
-      el.addEventListener("mouseleave", _pressOff, true);
-      el.addEventListener("blur", _pressOff, true);
-    }catch(_){}
-
-
-  // Pointer
-  try{
-    el.addEventListener("pointerdown", onDown, true);
-    el.addEventListener("pointermove", onMove, true);
-    el.addEventListener("pointerup", fire, true);
-    el.addEventListener("pointercancel", cancel, true);
-  }catch(e){}
-
-  // Touch
-  try{
-    el.addEventListener("touchstart", onDown, {passive:true, capture:true});
-    el.addEventListener("touchmove", onMove, {passive:true, capture:true});
-    el.addEventListener("touchend", fire, {passive:false, capture:true});
-    el.addEventListener("touchcancel", cancel, {passive:true, capture:true});
-  }catch(e){}
-
-  // Mouse
-  try{
-    el.addEventListener("mousedown", onDown, true);
-    el.addEventListener("mousemove", onMove, true);
-    el.addEventListener("mouseup", fire, true);
-  }catch(e){}
-
-  // Block synthetic click to avoid double firing
-  try{
-    el.addEventListener("click", function(e){
-      try{ if(e && e.preventDefault) e.preventDefault(); }catch(_){}
-      try{ if(e && e.stopPropagation) e.stopPropagation(); }catch(_){}
-      try{ if(e && e.stopImmediatePropagation) e.stopImmediatePropagation(); }catch(_){}
-      return false;
-    }, true);
-  }catch(e){}
-}
-
-
-function bindReleaseTap(el, fn){
-  // Alias: fire only on release (pointerup/touchend) via bindTap
-  return bindTap(el, fn);
-}
 
 /* === /TAP BINDING (GLOBAL) === */
 
@@ -16534,6 +17253,20 @@ function resolveForumUserName(u){
       if(w && w.__activeStudentTz) return normStr(w.__activeStudentTz);
     }catch(e){}
 
+    // View-as context (secretary/manager student profile modal)
+    try{
+      var role = "";
+      try{ role = String((window.APP_STATE && window.APP_STATE.role) || "").toLowerCase().trim(); }catch(_){}
+      var u0 = "";
+      try{ if(typeof getLoggedInUser === 'function') u0 = normStr(getLoggedInUser()); }catch(_){}
+      if(!u0){ try{ u0 = normStr(DBStorage.getItem('student_username') || ""); }catch(_){} }
+      var isPrivileged = (role === "secretary" || role === "manager" || u0 === "מזכירה" || u0 === "מנהל");
+      if(isPrivileged && window.__profileViewTz){
+        var t = normStr(window.__profileViewTz);
+        if(t) return String(t).replace(/\D/g,"").trim();
+      }
+    }catch(e){}
+
     var u = "";
     try{ if(typeof getLoggedInUser === 'function') u = normStr(getLoggedInUser()); }catch(e){}
     if(!u){
@@ -16989,19 +17722,37 @@ function openLessonsHistory(){
   function wire(){
     var btn = document.getElementById('spLessonsHistoryBtn');
     var kpi = document.getElementById('spKpiDoneCard');
-    function __openLH(e){ try{ if(e){ e.preventDefault(); } }catch(_){} openLessonsHistory(); }
+    function __openLH(e){ try{ if(e){ e.preventDefault(); } }catch(_){} try{ var m=document.getElementById('lessonsHistoryModal'); if(m) m.classList.add('sec-history-top'); }catch(e){} openLessonsHistory(); }
     if(kpi){
       if(typeof bindReleaseTap === 'function') bindReleaseTap(kpi, __openLH);
       else kpi.addEventListener('click', __openLH);
     }
     // Outside history
     var kpiOut = document.getElementById('spKpiOutCard');
-    function __openOH(e){ try{ if(e){ e.preventDefault(); } }catch(_){} openOutsideHistory(); }
+    function __openOH(e){ try{ if(e){ e.preventDefault(); } }catch(_){} try{ var m=document.getElementById('outsideHistoryModal'); if(m) m.classList.add('sec-history-top'); }catch(e){} openOutsideHistory(); }
     if(kpiOut){
       if(typeof bindReleaseTap === 'function') bindReleaseTap(kpiOut, __openOH);
       else kpiOut.addEventListener('click', __openOH);
     }
 
+
+    // Row clicks (inside secretary student profile modal)
+    var rowDone = document.getElementById('spLessonsDone');
+    if(rowDone){
+      if(typeof bindReleaseTap === 'function') bindReleaseTap(rowDone, __openLH);
+      else rowDone.addEventListener('click', __openLH);
+    }
+
+    var rowBal = document.getElementById('spBalanceMoney');
+    function __openTX(e){
+      try{ if(e){ e.preventDefault(); } }catch(_){}
+      try{ var m=document.getElementById('secTxHistoryModal'); if(m) m.classList.add('sec-history-top'); }catch(e){}
+      try{ if(typeof window.secOpenTransactionsHistoryFromModal === 'function') window.secOpenTransactionsHistoryFromModal(); }catch(e){}
+    }
+    if(rowBal){
+      if(typeof bindReleaseTap === 'function') bindReleaseTap(rowBal, __openTX);
+      else rowBal.addEventListener('click', __openTX);
+    }
 
     
     if(btn){
@@ -17041,6 +17792,18 @@ function openLessonsHistory(){
       });
     }
   }
+
+
+// Expose helpers for secretary modal (so KPI clicks can open these modals)
+try{
+  if(typeof window !== "undefined"){
+    if(!window.openLessonsHistory && typeof openLessonsHistory === "function") window.openLessonsHistory = openLessonsHistory;
+    if(!window.openOutsideHistory && typeof openOutsideHistory === "function") window.openOutsideHistory = openOutsideHistory;
+    if(!window.openBackdrop && typeof openBackdrop === "function") window.openBackdrop = openBackdrop;
+    if(!window.closeBackdrop && typeof closeBackdrop === "function") window.closeBackdrop = closeBackdrop;
+    if(!window.openModal && typeof openModal === "function") window.openModal = openModal;
+  }
+}catch(e){}
 
   if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', wire);
   else wire();
@@ -18805,10 +19568,35 @@ if(miniBtn){
         // Restore title to current student/guest if possible
         try{
           if(title && typeof timerGetStudentUsername === 'function'){
-            var u = (timerGetStudentUsername()||'').trim();
-            if(!u) u = (DBStorage.getItem('student_username')||'').trim();
-            if(!u) u = 'אורח';
-            title.textContent = 'ברוך הבא: ' + u;
+            var uKey = (timerGetStudentUsername()||'').trim();
+            if(!uKey) uKey = (DBStorage.getItem('student_username')||'').trim();
+
+            // Never display TZ/username in the welcome title - display FIRST NAME only
+            var displayName = '';
+            try{
+              if(uKey){
+                var rawP2 = DBStorage.getItem('student_profile_' + String(uKey));
+                if(rawP2){
+                  var p2 = JSON.parse(rawP2 || '{}') || {};
+                  var fnx = p2.firstName || p2.first_name || p2.fname || p2.firstname || p2.name || p2.first || '';
+                  if(fnx){
+                    fnx = String(fnx).trim();
+                    if(fnx) displayName = fnx.split(/\s+/)[0];
+                  }
+                }
+              }
+            }catch(eName1){}
+
+            // Additional fallback: use current logged profile resolver (still returns first name)
+            try{
+              if(!displayName && typeof getLoggedFirstName === 'function'){
+                var gn = getLoggedFirstName();
+                if(gn) displayName = String(gn).trim().split(/\s+/)[0];
+              }
+            }catch(eName2){}
+
+            if(!displayName) displayName = 'אורח';
+            title.textContent = 'ברוך הבא: ' + displayName;
           }
         }catch(e){}
       }
@@ -18955,23 +19743,116 @@ window.enableSecretaryMode = function(persist){
       function collectFutureTests(){
         var out = [];
         try{
+          // Build a unified student map from the SAME sources that secretary profile edits persist to.
+          // Priority for test date/time: student_profile_* / students_registry_v1 -> students db.
+          var byTz = Object.create(null);
+
+          // 1) Students DB (demo students_db_v1 / resolveStudentsDb)
           var arr = (typeof _secGetAllStudents === 'function') ? (_secGetAllStudents()||[]) : [];
           if(!Array.isArray(arr)) arr = [];
           for(var i=0;i<arr.length;i++){
             var st = arr[i] || {};
-            var testDate = _readAny(st, ['testDate','nextTestDate','תאריך טסט','תאריך_טסט','test_date']);
-            var testTime = _readAny(st, ['testTime','testHour','שעת טסט','שעה_טסט','test_time']);
+            var tz1 = '';
+            try{ tz1 = (typeof _secGetStudentTz === 'function') ? _secGetStudentTz(st) : ''; }catch(e){}
+            if(!tz1) tz1 = String(_readAny(st,['tz','id','username','userId','uid','תז','ת"ז'])||'').trim();
+            tz1 = (typeof normalizeTz === 'function') ? normalizeTz(tz1) : String(tz1).replace(/\D/g,'');
+            if(!tz1) continue;
+            (byTz[tz1]||(byTz[tz1]={})).db = st;
+          }
+
+          // 2) student_profile_* (this is where secSaveTestDateFromModal writes)
+          try{
+            var keys = (typeof getAllStudentKeys === 'function') ? (getAllStudentKeys()||[]) : [];
+            if(Array.isArray(keys)){
+              for(var k=0;k<keys.length;k++){
+                var tz2 = String(keys[k]||'').trim();
+                tz2 = (typeof normalizeTz === 'function') ? normalizeTz(tz2) : String(tz2).replace(/\D/g,'');
+                if(!tz2) continue;
+                var prof = (typeof getStudentProfile === 'function') ? getStudentProfile(tz2) : null;
+                if(prof && typeof prof === 'object'){
+                  (byTz[tz2]||(byTz[tz2]={})).prof = prof;
+                }
+              }
+            }
+          }catch(e){}
+
+          // 3) students_registry_v1 (secSaveTestDateFromModal updates it too)
+          try{
+            var regRaw = (window.DBStorage && DBStorage.getItem) ? DBStorage.getItem('students_registry_v1') : localStorage.getItem('students_registry_v1');
+            if(regRaw){
+              var reg = JSON.parse(regRaw);
+              if(Array.isArray(reg)){
+                for(var r=0;r<reg.length;r++){
+                  var it = reg[r] || {};
+                  if(!it || typeof it !== 'object') continue;
+                  var tz3 = String(it.tz || it.id || it.userId || it.username || it.user || it.uid || it.teudatZehut || it['תז'] || it['ת"ז'] || '').trim();
+                  tz3 = (typeof normalizeTz === 'function') ? normalizeTz(tz3) : String(tz3).replace(/\D/g,'');
+                  if(!tz3) continue;
+                  (byTz[tz3]||(byTz[tz3]={})).reg = it;
+                }
+              }else if(reg && typeof reg === 'object'){
+                Object.keys(reg).forEach(function(key){
+                  var it2 = reg[key];
+                  if(!it2 || typeof it2 !== 'object') return;
+                  var tz4 = String(it2.tz || key || '').trim();
+                  tz4 = (typeof normalizeTz === 'function') ? normalizeTz(tz4) : String(tz4).replace(/\D/g,'');
+                  if(!tz4) return;
+                  (byTz[tz4]||(byTz[tz4]={})).reg = it2;
+                });
+              }
+            }
+          }catch(e){}
+
+          // Build rows
+          var today0 = new Date();
+          try{ today0 = new Date(today0.getFullYear(), today0.getMonth(), today0.getDate(), 0,0,0,0); }catch(e){}
+
+          var tzList = Object.keys(byTz);
+          for(var j=0;j<tzList.length;j++){
+            var tz = tzList[j];
+            var pack = byTz[tz] || {};
+            var stDb = pack.db || {};
+            var stProf = pack.prof || {};
+            var stReg = pack.reg || {};
+
+            var testDate = _readAny(stProf, ['testDate','nextTestDate','test','test_date','תאריך טסט','תאריך_טסט'])
+                        || _readAny(stReg,  ['testDate','nextTestDate','test','test_date','תאריך טסט','תאריך_טסט'])
+                        || _readAny(stDb,   ['testDate','nextTestDate','תאריך טסט','תאריך_טסט','test_date','test']);
+            var testTime = _readAny(stProf, ['testTime','testHour','שעת טסט','שעה_טסט','test_time'])
+                        || _readAny(stReg,  ['testTime','testHour','שעת טסט','שעה_טסט','test_time'])
+                        || _readAny(stDb,   ['testTime','testHour','שעת טסט','שעה_טסט','test_time']);
+
             var dt = parseTestDateTime(testDate, testTime);
             if(!dt) continue;
+            // future only (including today)
+            if(dt < today0) continue;
+
             var name = '';
-            try{ name = (typeof _secStudentName==='function') ? _secStudentName(st) : ''; }catch(e){}
-            var tz = '';
-            try{ tz = (typeof _secGetStudentTz==='function') ? _secGetStudentTz(st) : ''; }catch(e){}
+            try{
+              if(typeof _secStudentName==='function'){
+                // Try merged view so name can come from db/profile/registry.
+                var merged = {};
+                try{ Object.assign(merged, stReg||{}, stProf||{}, stDb||{}); }catch(e){}
+                name = _secStudentName(merged);
+                if(!name){
+                  // fallback to original behavior
+                  name = _secStudentName((stDb && Object.keys(stDb).length) ? stDb : stProf);
+                }
+              }
+            }catch(e){}
+            if(!name){
+              try{
+                if(typeof pickStudentName==='function'){
+                  name = pickStudentName(tz, stProf) || pickStudentName(tz, stReg) || '';
+                }
+              }catch(e){}
+            }
+
             out.push({
-              name: name || String(_readAny(st,['name','fullName'])||'ללא שם'),
-              tz: tz || String(_readAny(st,['tz','id','username'])||''),
+              name: name || String(_readAny(stProf,['name','fullName','firstName','lastName'])||_readAny(stReg,['name','fullName','firstName','lastName'])||_readAny(stDb,['name','fullName','firstName','lastName'])||'ללא שם'),
+              tz: tz || String(_readAny(stDb,['tz','id','username'])||''),
               dt: dt,
-              time: pad2(dt.getHours()) + ':' + pad2(dt.getMinutes())
+              time: (testTime && String(testTime).trim()) ? (pad2(dt.getHours()) + ':' + pad2(dt.getMinutes())) : '—'
             });
           }
         }catch(e){}
@@ -19089,7 +19970,7 @@ window.enableSecretaryMode = function(persist){
         var old = document.getElementById('secFutureDayModal');
         if(old) old.remove();
         var title = (typeof _dateTitle === 'function') ? _dateTitle(dateKey) : dateKey;
-        var html = '<div id="secFutureDayModal" style="position:fixed;inset:0;z-index:2450;background:rgba(0,0,0,.35);display:grid;place-items:center;padding:14px;" dir="rtl">';
+        var html = '<div id="secFutureDayModal" style="position:fixed;inset:0;z-index:100005;background:rgba(0,0,0,.35);display:grid;place-items:center;padding:14px;" dir="rtl">';
         html += '<div id="secFutureDayModalBox" style="width:min(760px,95vw);max-height:82vh;overflow:auto;background:#08110f;border:1px solid rgba(255,255,255,.12);border-radius:18px;box-shadow:0 12px 40px rgba(0,0,0,.35);padding:12px;position:relative;color:#fff;">';
         html += '<button type="button" id="secFutureDayCloseX" class="pay-close-x" aria-label="סגור">×</button>';
         html += '<div style="font-weight:900;font-size:18px;margin:2px 0 12px;">טסטים ליום ' + escHtml(title) + '</div>';
@@ -19227,26 +20108,9 @@ window.enableSecretaryMode = function(persist){
     try{ renderSecretaryInbox(); }catch(e){}
     try{ if(typeof window.openOverlay === 'function') window.openOverlay('secInboxOverlay'); }catch(e){}
   };
-  window.openSecretaryCompose = function(){
-    if(!_secIsOn()) return;
-    try{ if(typeof window.closeMenu === 'function') window.closeMenu(); }catch(e){}
-    try{ if(typeof window.closeProfileMenu === 'function') window.closeProfileMenu(); }catch(e){}
-    
-    try{ _secEnsureComposeInit(); }catch(e){}
-    try{ window.closeOverlay && window.closeOverlay('secMailOverlay'); }catch(e){}
-    try{
-      var tz=document.getElementById('secComposeTz');
-      var msg=document.getElementById('secComposeMsg');
-      var sug=document.getElementById('secComposeSuggest');
-      var rec=document.getElementById('secComposeRecipients');
-      window.__secComposeRecipients = [];
-      if(tz) tz.value='';
-      if(msg) msg.value='';
-      if(sug){ sug.innerHTML=''; sug.setAttribute('aria-hidden','true'); sug.style.display='none'; }
-      if(rec) rec.innerHTML='';
-      if(tz) setTimeout(function(){ try{ tz.focus(); }catch(e){} }, 50);
-    }catch(e){}
-    try{ if(typeof window.openOverlay === 'function') window.openOverlay('secComposeOverlay'); }catch(e){}
+    window.openSecretaryCompose = function(){
+    // Old compose-with-search was removed. Compose is now from the student's modal profile.
+    try{ showToast("בחר תלמיד מהחיפוש ושלח הודעה מפרופיל התלמיד"); }catch(e){}
   };
 
   function _secReadLeaveMsgs(){

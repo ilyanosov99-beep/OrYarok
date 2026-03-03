@@ -95,10 +95,7 @@
 <img alt="" src="profile_icon.png"/>
 </button>
 
-<!-- Secretary: Mail button (locked to home, does not jump on keyboard) -->
-<button aria-label="הודעות" class="sec-mail-btn tap" data-tap="" id="secMailBtn" type="button" onclick="openSecretaryMail();event.stopPropagation();">
-  <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></svg>
-</button>
+<!-- Secretary: messages moved to left menu -->
 </div>
 <div class="menu-scrim" id="menuScrim" onclick="closeMenu()"></div>
 <aside aria-hidden="true" class="side-menu" id="sideMenu">
@@ -211,8 +208,7 @@
     <div class="leave-msg-form">
             <div class="sec-mail-actions">
         <button class="leave-msg-btn tap" data-tap="" type="button" onclick="openSecretaryInbox()">הודעות נכנסות</button>
-        <button class="leave-msg-btn tap" data-tap="" type="button" onclick="openSecretaryCompose()">כתיבת הודעה</button>
-      </div>
+              </div>
       <div class="leave-msg-actions">
         <button class="leave-msg-btn secondary tap" data-tap="" type="button" onclick="closeOverlay('secMailOverlay')">סגור</button>
       </div>
@@ -232,27 +228,35 @@
   </div>
 </div>
 
-<div class="overlay overlay-dim" id="secComposeOverlay" onclick="closeOverlay('secComposeOverlay')">
-  <div class="popup-box leave-msg-box sec-mail-box" onclick="event.stopPropagation()">
-    <div class="popup-title">כתיבת הודעה</div>
-    <div class="leave-msg-form">
-      <div class="leave-msg-hint">חיפוש תלמיד לפי ת״ז ושליחה לאזור האישי שלו</div>
-      <label class="leave-msg-label">ת״ז</label>
-      <div class="sec-compose-row">
-        <input class="leave-msg-input" id="secComposeTz" inputmode="numeric" placeholder="תעודת זהות" type="text"/>
-        <button class="leave-msg-btn tap" data-tap="" type="button" onclick="secFindStudentForCompose()">חפש</button>
-      </div>
-      <div class="sec-suggest" id="secComposeSuggest" aria-hidden="true"></div>
-      <div class="sec-recipients" id="secComposeRecipients"></div>
-      <label class="leave-msg-label">הודעה</label>
-      <textarea class="leave-msg-textarea" id="secComposeMsg" placeholder="כתוב/כתבי כאן הודעה..." rows="4"></textarea>
-      <div class="leave-msg-actions">
-        <button class="leave-msg-btn tap" data-tap="" type="button" onclick="secSendComposeMessage()">שלח</button>
-        <button class="leave-msg-btn secondary tap" data-tap="" type="button" onclick="closeOverlay('secComposeOverlay')">סגור</button>
-      </div>
+<!-- Secretary: Student Profile Modal (from home search) -->
+<div class="overlay overlay-dim" id="secStudentProfileOverlay" onclick="closeSecStudentProfileModal()" aria-hidden="true">
+  <div class="sec-sp-shell" id="secSpShell" onclick="event.stopPropagation()"></div>
+</div>
+
+<!-- Secretary: Quick message to selected student (no search) -->
+<div class="overlay overlay-dim" id="secQuickMsgOverlay" onclick="closeOverlay('secQuickMsgOverlay')" aria-hidden="true">
+  <div class="popup-box sec-qm-box" onclick="event.stopPropagation()">
+    <div class="sec-qm-head">
+      <div class="sec-qm-title">שליחת הודעה</div>
+      <button aria-label="סגור" class="sec-qm-x tap" data-tap="" type="button" onclick="closeOverlay('secQuickMsgOverlay')">✕</button>
+    </div>
+    <div class="sec-qm-sub" id="secQmToLine">ל: —</div>
+    <div class="sec-qm-body">
+      <label class="leave-msg-label" for="secQmMsg">הודעה</label>
+      <textarea id="secQmMsg" class="leave-msg-input leave-msg-textarea" rows="5" placeholder="כתוב/כתבי כאן הודעה..."></textarea>
+    </div>
+    <div class="leave-msg-actions">
+      <button class="leave-msg-btn tap" data-tap="" type="button" onclick="secSendQuickMessage()">שלח</button>
+      <button class="leave-msg-btn secondary tap" data-tap="" type="button" onclick="closeOverlay('secQuickMsgOverlay')">סגור</button>
     </div>
   </div>
 </div>
+
+
+
+
+
+
 
 <!-- ===== Start Button Sandbox ===== -->
 <div aria-hidden="true" class="start-overlay" id="startOverlay">
@@ -445,6 +449,13 @@
       <svg viewBox="0 0 24 24"><path d="M21 7H3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2zm0 8H3V9h18v6zM5 11h6v2H5v-2z"/></svg>
     </span>
     <span class="menu-text">תשלום</span>
+  </button>
+
+  <button class="menu-item tap" data-tap="" id="secretaryMessagesBtn" type="button" onclick="openSecretaryMail()">
+    <span aria-hidden="true" class="menu-ico">
+      <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></svg>
+    </span>
+    <span class="menu-text">הודעות</span>
   </button>
   <button class="menu-item tap" data-tap="" id="secretaryLogoutBtn" type="button">
     <span aria-hidden="true" class="menu-ico">
@@ -742,13 +753,7 @@
 </div>
 <div class="overlay" id="contactOverlay" onclick="closePopup()">
 <div class="popup-box" onclick="event.stopPropagation()">
-<div class="popup-item tap" data-tap="" onclick="callCars()">
-<img alt="רכבים" src="car_icon.png"/>
-<div class="popup-label">רכבים</div>
 </div>
-<div class="popup-item tap" data-tap="" onclick="callMotorcycles()">
-<img alt="אופנועים" src="moto_icon.png"/>
-<div class="popup-label">אופנועים</div>
 </div>
 <div class="popup-item tap" data-tap="" onclick="openWhatsApp()">
 <img alt="וואטסאפ" src="whatsapp_icon.png"/>
@@ -756,13 +761,7 @@
 </div>
 </div>
 </div>
-<div class="popup-item" onclick="contactMoto()">
-<img alt="אופנועים" src="moto_icon.png"/>
-<div class="popup-label">אופנועים</div>
 </div>
-<div class="popup-item" onclick="contactWhatsapp()">
-<img alt="וואטסאפ" src="whatsapp_icon.png"/>
-<div class="popup-label">וואטסאפ</div>
 </div>
 <div class="overlay" id="leaveMessageOverlay" onclick="closeOverlay('leaveMessageOverlay')">
 <div class="popup-box leave-msg-box" onclick="event.stopPropagation()">
@@ -810,25 +809,17 @@
 </div>
 <div class="overlay" id="formsOverlay" onclick="closePopup()">
 <div class="popup-box" onclick="event.stopPropagation()">
-<div class="popup-item tap" data-tap="" onclick="openGreenForm()" role="button" tabindex="0">
-<img alt="טופס ירוק" src="form1_icon.png"/>
-<div class="popup-label">טופס ירוק</div>
+<div class="popup-item tap" data-tap="" onclick="openGreenForm()" role="button" tabindex="0"><div class="popup-label">טופס ירוק</div>
 </div>
-<div class="popup-item tap" data-tap="" role="button" tabindex="0">
-<img alt="" src="form2_icon.png"/>
-<div class="popup-label">טופס נוסף</div>
+<div class="popup-item tap" data-tap="" role="button" tabindex="0"><div class="popup-label">טופס נוסף</div>
 </div>
 </div>
 </div>
 <div class="overlay" id="locationOverlay" onclick="closePopup()">
 <div class="popup-box popup-labeled" onclick="event.stopPropagation()">
-<div class="popup-item" onclick="openCarLocation()">
-<img alt="רכבים" src="car_icon.png"/>
-<div class="popup-label">רכבים</div>
+<div class="popup-item" onclick="openCarLocation()"><div class="popup-label">רכבים</div>
 </div>
-<div class="popup-item" onclick="openMotoLocation()">
-<img alt="אופנועים" src="moto_icon.png"/>
-<div class="popup-label">אופנועים</div>
+<div class="popup-item" onclick="openMotoLocation()"><div class="popup-label">אופנועים</div>
 </div>
 </div>
 </div>
@@ -1289,7 +1280,7 @@
 <tr><td class="k">סוג רישיון</td><td id="spLicense">—</td></tr>
 <tr><td class="k">ת״ז</td><td id="spId">—</td></tr>
 <tr><td class="k">מספר פלאפון</td><td class="v"><span id="spPhone">—</span></td></tr>
-<tr><td class="k">תאריך לטסט</td><td id="spTestDate">—</td></tr>
+<tr><td class="k">תאריך לטסט</td><td class="v"><div id="spTestDate">—</div><div id="spTestTime" class="sp-test-time">—</div></td></tr>
 <tr><td class="k">מס׳ שיעורים שבוצעו</td><td id="spLessonsDone">—</td></tr>
 <tr><td class="k">יתרה (₪)</td><td id="spBalanceMoney">—</td></tr>
 <tr><td class="k">כמות טסטים שביצע</td><td id="spTestsTaken">—</td></tr>
@@ -1545,6 +1536,29 @@
 <button class="btnSmall" id="outsideHistoryClose" type="button">סגירה</button>
 </div>
 </div>
+</div>
+
+<div aria-hidden="true" class="modalBackdrop" id="secTxHistoryModal">
+  <div aria-label="היסטוריית עסקאות" aria-modal="true" class="modalBox" role="dialog">
+    <div class="modalTitle">היסטוריית עסקאות</div>
+    <div class="modalText" id="secTxHistorySub">רשימת העסקאות של התלמיד.</div>
+    <div style="max-height: 60vh; overflow:auto; border:1px solid rgba(255,255,255,0.08); border-radius:12px; margin-top:10px;">
+      <table aria-label="טבלת עסקאות" class="sp-table" style="width:100%;">
+        <thead>
+          <tr>
+            <td class="k" style="font-weight:700;">תאריך</td>
+            <td class="k" style="font-weight:700;">סוג</td>
+            <td class="k" style="font-weight:700;">סכום</td>
+            <td class="k" style="font-weight:700;">הערה</td>
+          </tr>
+        </thead>
+        <tbody id="secTxHistoryTbody"></tbody>
+      </table>
+    </div>
+    <div class="timerModalBtns" style="margin-top:12px;">
+      <button class="btnSmall" id="secTxHistoryClose" type="button">סגירה</button>
+    </div>
+  </div>
 </div>
 <!-- ===== /ADMIN OVERLAY ===== -->
 <!-- ===== MANAGER OVERLAY (new, separate) ===== -->
