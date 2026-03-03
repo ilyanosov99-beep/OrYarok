@@ -39,9 +39,9 @@
 </template>
 <img alt="" class="welcome-logo" src="green_logo.png"/>
 <!-- SECRETARY: Student Search (shown only in secretary-mode) -->
-<div id="secSearchWrap" aria-hidden="true">
-  <input id="secStudentSearch" class="mgr-input-dark" type="search" placeholder="חיפוש תלמיד לפי שם / ת״ז / פלאפון" autocomplete="off" />
-  <div id="secStudentResults" class="mgr-stu-results"></div>
+<div aria-hidden="true" id="secSearchWrap">
+<input autocomplete="off" class="mgr-input-dark" id="secStudentSearch" placeholder="חיפוש תלמיד לפי שם / ת״ז / פלאפון" type="search"/>
+<div class="mgr-stu-results" id="secStudentResults"></div>
 </div>
 <button aria-label="עגלת קניות" class="shop-cart-btn tap" data-tap="" id="shopCartBtn" onclick="openShopCart()" type="button">
 <img alt="עגלה" src="shop_cart_icon.png"/>
@@ -62,20 +62,16 @@
 </div>
 <!-- ADS BOARD (Home) -->
 <div aria-label="לוח מודעות" class="ads-board" id="adsBoard">
-<button type="button" class="ads-close-btn" id="adsCloseBtn" aria-label="הקטן לוח מודעות" onclick="__toggleAdsMini(event)" ontouchstart="__toggleAdsMini(event)">✕</button>
-<button type="button" class="ads-float-toggle" id="adsFloatToggle" aria-label="הגדל לוח מודעות" onclick="__toggleAdsMini(event)" ontouchstart="__toggleAdsMini(event)">
-  <svg class="aft-expand-svg" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-    <path d="M8 3H3v5h2V5h3V3zm13 0h-5v2h3v3h2V3zM5 19v-3H3v5h5v-2H5zm16-3h-2v3h-3v2h5v-5z" fill="currentColor"/>
-  </svg>
+<button aria-label="הקטן לוח מודעות" class="ads-close-btn" id="adsCloseBtn" onclick="__toggleAdsMini(event)" ontouchstart="__toggleAdsMini(event)" type="button">✕</button>
+<button aria-label="הגדל לוח מודעות" class="ads-float-toggle" id="adsFloatToggle" onclick="__toggleAdsMini(event)" ontouchstart="__toggleAdsMini(event)" type="button">
+<svg aria-hidden="true" class="aft-expand-svg" focusable="false" viewbox="0 0 24 24">
+<path d="M8 3H3v5h2V5h3V3zm13 0h-5v2h3v3h2V3zM5 19v-3H3v5h5v-2H5zm16-3h-2v3h-3v2h5v-5z" fill="currentColor"></path>
+</svg>
 </button>
 <div class="ads-shell">
 <div class="ads-inner" id="adsInner">
 <!-- Top frame image (provided by user as misgeret.png) -->
 <img alt="" aria-hidden="true" class="ads-frame-top" src="misgeret.png"/>
-
-
-
-
 <div class="ads-viewport" id="adsViewport"><div class="ads-media" id="adsMedia"></div><div class="ads-empty" id="adsEmpty">אין מודעות כרגע</div></div></div>
 </div>
 </div>
@@ -94,7 +90,6 @@
 <button aria-label="פרופיל" class="home-profile-btn tap" data-tap="" id="profileBtn">
 <img alt="" src="profile_icon.png"/>
 </button>
-
 <!-- Secretary: messages moved to left menu -->
 </div>
 <div class="menu-scrim" id="menuScrim" onclick="closeMenu()"></div>
@@ -102,7 +97,7 @@
 <div class="side-menu-header"><div class="side-menu-title" id="menuHeaderTitle">תפריט</div>
 </div><div class="menu-scroll" id="menuScroll">
 <div id="menuMainSection">
-<button class="menu-item tap" data-tap="" onclick="openPage('sharePage')">
+<button class="menu-item tap" data-tap="" onclick="closeMenu(); shareApp()">
 <span aria-hidden="true" class="menu-ico">
 <!-- share -->
 <svg viewbox="0 0 24 24"><path d="M18 16.08c-.76 0-1.44.3-1.96.77L8.91 12.7c.05-.23.09-.46.09-.7s-.03-.47-.09-.7l7.02-4.11A2.99 2.99 0 0 0 18 7.91a3 3 0 1 0-3-3c0 .24.04.47.09.7L8.07 9.72A3 3 0 1 0 6 15a2.99 2.99 0 0 0 2.07-.81l7.02 4.11c-.05.21-.09.43-.09.66a3 3 0 1 0 3-2.88z"></path></svg>
@@ -148,12 +143,12 @@
 </button>
 </div>
 <div id="menuSecretaryRightSection" style="display:none">
-  <button class="menu-item tap" type="button" onclick="openPage('settingsPage')">
-    <span aria-hidden="true" class="menu-ico">
-      <svg viewBox="0 0 24 24"><path d="M19.43 12.98l1.77-1.03-1.5-2.6-2 .38c-.34-.26-.72-.47-1.12-.65l-.3-2.02h-3l-.3 2.02c-.4.18-.78.39-1.12.65l-2-.38-1.5 2.6 1.77 1.03c-.03.33-.05.67-.05 1.02s.02.69.05 1.02l-1.77 1.03 1.5 2.6 2-.38c.34.26.72.47 1.12.65l.3 2.02h3l.3-2.02c.4-.18.78-.39 1.12-.65l2 .38 1.5-2.6-1.77-1.03c.03-.33.05-.67.05-1.02s-.02-.69-.05-1.02zM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5z"></path></svg>
-    </span>
-    <span class="menu-text" data-i18n="menu_settings">הגדרות</span>
-  </button>
+<button class="menu-item tap" onclick="openPage('settingsPage')" type="button">
+<span aria-hidden="true" class="menu-ico">
+<svg viewbox="0 0 24 24"><path d="M19.43 12.98l1.77-1.03-1.5-2.6-2 .38c-.34-.26-.72-.47-1.12-.65l-.3-2.02h-3l-.3 2.02c-.4.18-.78.39-1.12.65l-2-.38-1.5 2.6 1.77 1.03c-.03.33-.05.67-.05 1.02s.02.69.05 1.02l-1.77 1.03 1.5 2.6 2-.38c.34.26.72.47 1.12.65l.3 2.02h3l.3-2.02c.4-.18.78-.39 1.12-.65l2 .38 1.5-2.6-1.77-1.03c.03-.33.05-.67.05-1.02s-.02-.69-.05-1.02zM12 15.5A3.5 3.5 0 1 1 12 8a3.5 3.5 0 0 1 0 7.5z"></path></svg>
+</span>
+<span class="menu-text" data-i18n="menu_settings">הגדרות</span>
+</button>
 </div>
 </div></aside>
 <!-- ===== Profile Sandbox: Toast ===== -->
@@ -200,64 +195,52 @@
 </div>
 </div>
 </div>
-
 <!-- ===== Secretary Mail (Inbox + Compose) ===== -->
 <div class="overlay overlay-dim" id="secMailOverlay" onclick="closeOverlay('secMailOverlay')">
-  <div class="popup-box leave-msg-box sec-mail-box" onclick="event.stopPropagation()">
-    <div class="popup-title">הודעות</div>
-    <div class="leave-msg-form">
-            <div class="sec-mail-actions">
-        <button class="leave-msg-btn tap" data-tap="" type="button" onclick="openSecretaryInbox()">הודעות נכנסות</button>
-              </div>
-      <div class="leave-msg-actions">
-        <button class="leave-msg-btn secondary tap" data-tap="" type="button" onclick="closeOverlay('secMailOverlay')">סגור</button>
-      </div>
-    </div>
-  </div>
+<div class="popup-box leave-msg-box sec-mail-box" onclick="event.stopPropagation()">
+<div class="popup-title">הודעות</div>
+<div class="leave-msg-form">
+<div class="sec-mail-actions">
+<button class="leave-msg-btn tap" data-tap="" onclick="openSecretaryInbox()" type="button">הודעות נכנסות</button>
 </div>
-
+<div class="leave-msg-actions">
+<button class="leave-msg-btn secondary tap" data-tap="" onclick="closeOverlay('secMailOverlay')" type="button">סגור</button>
+</div>
+</div>
+</div>
+</div>
 <div class="overlay overlay-dim" id="secInboxOverlay" onclick="closeOverlay('secInboxOverlay')">
-  <div class="popup-box leave-msg-box sec-mail-box" onclick="event.stopPropagation()">
-    <div class="popup-title">הודעות נכנסות</div>
-    <div class="leave-msg-form">
-      <div class="sec-inbox-list" id="secInboxList"></div>
-      <div class="leave-msg-actions">
-        <button class="leave-msg-btn secondary tap" data-tap="" type="button" onclick="closeOverlay('secInboxOverlay')">סגור</button>
-      </div>
-    </div>
-  </div>
+<div class="popup-box leave-msg-box sec-mail-box" onclick="event.stopPropagation()">
+<div class="popup-title">הודעות נכנסות</div>
+<div class="leave-msg-form">
+<div class="sec-inbox-list" id="secInboxList"></div>
+<div class="leave-msg-actions">
+<button class="leave-msg-btn secondary tap" data-tap="" onclick="closeOverlay('secInboxOverlay')" type="button">סגור</button>
 </div>
-
+</div>
+</div>
+</div>
 <!-- Secretary: Student Profile Modal (from home search) -->
-<div class="overlay overlay-dim" id="secStudentProfileOverlay" onclick="closeSecStudentProfileModal()" aria-hidden="true">
-  <div class="sec-sp-shell" id="secSpShell" onclick="event.stopPropagation()"></div>
+<div aria-hidden="true" class="overlay overlay-dim" id="secStudentProfileOverlay" onclick="closeSecStudentProfileModal()">
+<div class="sec-sp-shell" id="secSpShell" onclick="event.stopPropagation()"></div>
 </div>
-
 <!-- Secretary: Quick message to selected student (no search) -->
-<div class="overlay overlay-dim" id="secQuickMsgOverlay" onclick="closeOverlay('secQuickMsgOverlay')" aria-hidden="true">
-  <div class="popup-box sec-qm-box" onclick="event.stopPropagation()">
-    <div class="sec-qm-head">
-      <div class="sec-qm-title">שליחת הודעה</div>
-      <button aria-label="סגור" class="sec-qm-x tap" data-tap="" type="button" onclick="closeOverlay('secQuickMsgOverlay')">✕</button>
-    </div>
-    <div class="sec-qm-sub" id="secQmToLine">ל: —</div>
-    <div class="sec-qm-body">
-      <label class="leave-msg-label" for="secQmMsg">הודעה</label>
-      <textarea id="secQmMsg" class="leave-msg-input leave-msg-textarea" rows="5" placeholder="כתוב/כתבי כאן הודעה..."></textarea>
-    </div>
-    <div class="leave-msg-actions">
-      <button class="leave-msg-btn tap" data-tap="" type="button" onclick="secSendQuickMessage()">שלח</button>
-      <button class="leave-msg-btn secondary tap" data-tap="" type="button" onclick="closeOverlay('secQuickMsgOverlay')">סגור</button>
-    </div>
-  </div>
+<div aria-hidden="true" class="overlay overlay-dim" id="secQuickMsgOverlay" onclick="closeOverlay('secQuickMsgOverlay')">
+<div class="popup-box sec-qm-box" onclick="event.stopPropagation()">
+<div class="sec-qm-head">
+<div class="sec-qm-title">שליחת הודעה</div>
 </div>
-
-
-
-
-
-
-
+<div class="sec-qm-sub" id="secQmToLine">ל: —</div>
+<div class="sec-qm-body">
+<label class="leave-msg-label" for="secQmMsg">הודעה</label>
+<textarea class="leave-msg-input leave-msg-textarea" id="secQmMsg" placeholder="כתוב/כתבי כאן הודעה..." rows="5"></textarea>
+</div>
+<div class="leave-msg-actions">
+<button class="leave-msg-btn tap" data-tap="" onclick="secSendQuickMessage()" type="button">שלח</button>
+<button class="leave-msg-btn secondary tap" data-tap="" onclick="closeOverlay('secQuickMsgOverlay')" type="button">סגור</button>
+</div>
+</div>
+</div>
 <!-- ===== Start Button Sandbox ===== -->
 <div aria-hidden="true" class="start-overlay" id="startOverlay">
 <div aria-labelledby="startTitle" aria-modal="true" class="start-modal" role="dialog">
@@ -339,7 +322,7 @@
 <div class="menu-title" id="studentMenuTitle">ברוך הבא: אורח</div>
 </div>
 <div class="menu-scroll" id="studentMenuScroll">
-<div id="menuStudentSection" aria-hidden="false">
+<div aria-hidden="false" id="menuStudentSection">
 <button class="menu-item tap" data-tap="" id="updateProfileBtn" type="button">
 <span aria-hidden="true" class="menu-ico">
 <svg viewbox="0 0 24 24"><path d="M4 20h4l10.5-10.5a2 2 0 0 0 0-2.8l-1.2-1.2a2 2 0 0 0-2.8 0L4 16v4zM13.5 6.5l4 4"></path></svg>
@@ -378,94 +361,83 @@
 </span>
 <span class="menu-text" data-i18n="studentmenu_logout">התנתק</span>
 </button>
-
 </div>
-
-<div id="menuManagerSection" aria-hidden="true" style="display:none;">
-  <button class="menu-item tap" data-tap="" onclick="openManagerMenuTarget('shop')">
-    <span aria-hidden="true" class="menu-ico">
-      <svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-1.99.9-1.99 2S15.9 22 17 22s2-.9 2-2-.9-2-2-2zM7.2 14h9.9c.75 0 1.4-.41 1.74-1.03L21 6H6.21L5.27 4H2v2h2l3.6 7.59-1.35 2.44C5.52 17.37 6.48 19 8 19h12v-2H8l1.2-2z"/></svg>
-    </span>
-    <span class="menu-text">ניהול חנות</span>
-  </button>
-
-  <button class="menu-item tap" data-tap="" onclick="openManagerMenuTarget('students')">
-    <span aria-hidden="true" class="menu-ico">
-      <svg viewBox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5C15 14.17 10.33 13 8 13zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/></svg>
-    </span>
-    <span class="menu-text">ניהול תלמידים</span>
-  </button>
-
-  <button class="menu-item tap" data-tap="" onclick="openManagerMenuTarget('payments')">
-    <span aria-hidden="true" class="menu-ico">
-      <svg viewBox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm1 17.93c-2.83-.48-5-3.05-5-5.93V7.3l5-2.22V19.93z"/></svg>
-    </span>
-    <span class="menu-text">מעקב תשלומים</span>
-  </button>
-
-  <button class="menu-item tap" data-tap="" onclick="openManagerMenuTarget('orders')">
-    <span aria-hidden="true" class="menu-ico">
-      <svg viewBox="0 0 24 24"><path d="M7 4h-2l-1 2H1v2h2l3.6 7.59-1.35 2.44C4.52 19.37 5.48 21 7 21h12v-2H7l1.1-2h7.45c.75 0 1.41-.41 1.75-1.03L21 8H6.21L5.27 6H7V4zm3 16c-1.1 0-1.99.9-1.99 2S8.9 24 10 24s2-.9 2-2-.9-2-2-2zm8 0c-1.1 0-1.99.9-1.99 2S16.9 24 18 24s2-.9 2-2-.9-2-2-2z"/></svg>
-    </span>
-    <span class="menu-text">ניהול הזמנות</span>
-  </button>
-
-  <button class="menu-item tap" data-tap="" onclick="openManagerMenuTarget('ads')">
-    <span aria-hidden="true" class="menu-ico">
-      <svg viewBox="0 0 24 24"><path d="M3 3h18v2H3V3zm0 4h18v10H3V7zm0 12h18v2H3v-2zm4-9h10v2H7v-2zm0 4h7v2H7v-2z"/></svg>
-    </span>
-    <span class="menu-text">עריכת לוח מודעות</span>
-  </button>
-
-  <button class="menu-item tap" data-tap="" id="managerLogoutBtn" type="button">
-    <span aria-hidden="true" class="menu-ico">
-      <svg viewBox="0 0 24 24"><path d="M10 17l1.4-1.4L8.8 13H20v-2H8.8l2.6-2.6L10 7l-7 5 7 5zm9-14h-8v2h8v14h-8v2h8a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z"/></svg>
-    </span>
-    <span class="menu-text">התנתק</span>
-  </button>
+<div aria-hidden="true" id="menuManagerSection" style="display:none;">
+<button class="menu-item tap" data-tap="" onclick="openManagerMenuTarget('shop')">
+<span aria-hidden="true" class="menu-ico">
+<svg viewbox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-1.99.9-1.99 2S15.9 22 17 22s2-.9 2-2-.9-2-2-2zM7.2 14h9.9c.75 0 1.4-.41 1.74-1.03L21 6H6.21L5.27 4H2v2h2l3.6 7.59-1.35 2.44C5.52 17.37 6.48 19 8 19h12v-2H8l1.2-2z"></path></svg>
+</span>
+<span class="menu-text">ניהול חנות</span>
+</button>
+<button class="menu-item tap" data-tap="" onclick="openManagerMenuTarget('students')">
+<span aria-hidden="true" class="menu-ico">
+<svg viewbox="0 0 24 24"><path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5s-3 1.34-3 3 1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5C15 14.17 10.33 13 8 13zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"></path></svg>
+</span>
+<span class="menu-text">ניהול תלמידים</span>
+</button>
+<button class="menu-item tap" data-tap="" onclick="openManagerMenuTarget('payments')">
+<span aria-hidden="true" class="menu-ico">
+<svg viewbox="0 0 24 24"><path d="M12 1L3 5v6c0 5.55 3.84 10.74 9 12 5.16-1.26 9-6.45 9-12V5l-9-4zm1 17.93c-2.83-.48-5-3.05-5-5.93V7.3l5-2.22V19.93z"></path></svg>
+</span>
+<span class="menu-text">מעקב תשלומים</span>
+</button>
+<button class="menu-item tap" data-tap="" onclick="openManagerMenuTarget('orders')">
+<span aria-hidden="true" class="menu-ico">
+<svg viewbox="0 0 24 24"><path d="M7 4h-2l-1 2H1v2h2l3.6 7.59-1.35 2.44C4.52 19.37 5.48 21 7 21h12v-2H7l1.1-2h7.45c.75 0 1.41-.41 1.75-1.03L21 8H6.21L5.27 6H7V4zm3 16c-1.1 0-1.99.9-1.99 2S8.9 24 10 24s2-.9 2-2-.9-2-2-2zm8 0c-1.1 0-1.99.9-1.99 2S16.9 24 18 24s2-.9 2-2-.9-2-2-2z"></path></svg>
+</span>
+<span class="menu-text">ניהול הזמנות</span>
+</button>
+<button class="menu-item tap" data-tap="" onclick="openManagerMenuTarget('ads')">
+<span aria-hidden="true" class="menu-ico">
+<svg viewbox="0 0 24 24"><path d="M3 3h18v2H3V3zm0 4h18v10H3V7zm0 12h18v2H3v-2zm4-9h10v2H7v-2zm0 4h7v2H7v-2z"></path></svg>
+</span>
+<span class="menu-text">עריכת לוח מודעות</span>
+</button>
+<button class="menu-item tap" data-tap="" id="managerLogoutBtn" type="button">
+<span aria-hidden="true" class="menu-ico">
+<svg viewbox="0 0 24 24"><path d="M10 17l1.4-1.4L8.8 13H20v-2H8.8l2.6-2.6L10 7l-7 5 7 5zm9-14h-8v2h8v14h-8v2h8a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z"></path></svg>
+</span>
+<span class="menu-text">התנתק</span>
+</button>
 </div>
-
-<div id="menuSecretarySection" aria-hidden="true" style="display:none;">
-  <button class="menu-item tap" data-tap="" id="secretaryLessonsMgmtBtn" type="button" onclick="openSecretaryLessonsManagement()">
-    <span aria-hidden="true" class="menu-ico">
-      <svg viewBox="0 0 24 24"><path d="M7 2v3M17 2v3M4 7h16M6 10h4M6 14h4M14 10h4M14 14h4M5 5h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/></svg>
-    </span>
-    <span class="menu-text">ניהול שיעורים</span>
-  </button>
-  <button class="menu-item tap" data-tap="" id="secretaryTestOrdersBtn" type="button" onclick="openSecretaryTestOrders()">
-    <span aria-hidden="true" class="menu-ico">
-      <svg viewBox="0 0 24 24"><path d="M7 2v3M17 2v3M4 7h16M6 10h4M6 14h4M14 10h4M14 14h4M5 5h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/></svg>
-    </span>
-    <span class="menu-text">טסטים</span>
-  </button>
-  <button class="menu-item tap" data-tap="" id="secretaryShopBtn" type="button" onclick="openSecretaryShop()">
-    <span aria-hidden="true" class="menu-ico">
-      <svg viewBox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-1.99.9-1.99 2S15.9 22 17 22s2-.9 2-2-.9-2-2-2zM7.2 14h9.9c.75 0 1.4-.41 1.74-1.03L21 6H6.21L5.27 4H2v2h2l3.6 7.59-1.35 2.44C5.52 17.37 6.48 19 8 19h12v-2H8l1.2-2z"/></svg>
-    </span>
-    <span class="menu-text">חנות</span>
-  </button>
-  <button class="menu-item tap" data-tap="" id="secretaryPaymentBtn" type="button" onclick="openSecretaryPaymentPage()">
-    <span aria-hidden="true" class="menu-ico">
-      <svg viewBox="0 0 24 24"><path d="M21 7H3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2zm0 8H3V9h18v6zM5 11h6v2H5v-2z"/></svg>
-    </span>
-    <span class="menu-text">תשלום</span>
-  </button>
-
-  <button class="menu-item tap" data-tap="" id="secretaryMessagesBtn" type="button" onclick="openSecretaryMail()">
-    <span aria-hidden="true" class="menu-ico">
-      <svg viewBox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"/></svg>
-    </span>
-    <span class="menu-text">הודעות</span>
-  </button>
-  <button class="menu-item tap" data-tap="" id="secretaryLogoutBtn" type="button">
-    <span aria-hidden="true" class="menu-ico">
-      <svg viewBox="0 0 24 24"><path d="M10 17l1.4-1.4L8.8 13H20v-2H8.8l2.6-2.6L10 7l-7 5 7 5zm9-14h-8v2h8v14h-8v2h8a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z"/></svg>
-    </span>
-    <span class="menu-text">התנתק</span>
-  </button>
+<div aria-hidden="true" id="menuSecretarySection" style="display:none;">
+<button class="menu-item tap" data-tap="" id="secretaryLessonsMgmtBtn" onclick="openSecretaryLessonsManagement()" type="button">
+<span aria-hidden="true" class="menu-ico">
+<svg viewbox="0 0 24 24"><path d="M7 2v3M17 2v3M4 7h16M6 10h4M6 14h4M14 10h4M14 14h4M5 5h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"></path></svg>
+</span>
+<span class="menu-text">ניהול שיעורים</span>
+</button>
+<button class="menu-item tap" data-tap="" id="secretaryTestOrdersBtn" onclick="openSecretaryTestOrders()" type="button">
+<span aria-hidden="true" class="menu-ico">
+<svg viewbox="0 0 24 24"><path d="M7 2v3M17 2v3M4 7h16M6 10h4M6 14h4M14 10h4M14 14h4M5 5h14a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"></path></svg>
+</span>
+<span class="menu-text">טסטים</span>
+</button>
+<button class="menu-item tap" data-tap="" id="secretaryShopBtn" onclick="openSecretaryShop()" type="button">
+<span aria-hidden="true" class="menu-ico">
+<svg viewbox="0 0 24 24"><path d="M7 18c-1.1 0-1.99.9-1.99 2S5.9 22 7 22s2-.9 2-2-.9-2-2-2zm10 0c-1.1 0-1.99.9-1.99 2S15.9 22 17 22s2-.9 2-2-.9-2-2-2zM7.2 14h9.9c.75 0 1.4-.41 1.74-1.03L21 6H6.21L5.27 4H2v2h2l3.6 7.59-1.35 2.44C5.52 17.37 6.48 19 8 19h12v-2H8l1.2-2z"></path></svg>
+</span>
+<span class="menu-text">חנות</span>
+</button>
+<button class="menu-item tap" data-tap="" id="secretaryPaymentBtn" onclick="openSecretaryPaymentPage()" type="button">
+<span aria-hidden="true" class="menu-ico">
+<svg viewbox="0 0 24 24"><path d="M21 7H3a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h18a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2zm0 8H3V9h18v6zM5 11h6v2H5v-2z"></path></svg>
+</span>
+<span class="menu-text">תשלום</span>
+</button>
+<button class="menu-item tap" data-tap="" id="secretaryMessagesBtn" onclick="openSecretaryMail()" type="button">
+<span aria-hidden="true" class="menu-ico">
+<svg viewbox="0 0 24 24"><path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5-8-5V6l8 5 8-5v2z"></path></svg>
+</span>
+<span class="menu-text">הודעות</span>
+</button>
+<button class="menu-item tap" data-tap="" id="secretaryLogoutBtn" type="button">
+<span aria-hidden="true" class="menu-ico">
+<svg viewbox="0 0 24 24"><path d="M10 17l1.4-1.4L8.8 13H20v-2H8.8l2.6-2.6L10 7l-7 5 7 5zm9-14h-8v2h8v14h-8v2h8a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2z"></path></svg>
+</span>
+<span class="menu-text">התנתק</span>
+</button>
 </div>
-
-
 </div>
 </aside>
 <div class="page" id="licenseRequestPage">
@@ -580,13 +552,120 @@
   </div>
 </div>
 </div>
-<button class="page-back" onclick="backToMainMenu()" type="button">חזרה</button>
 </div>
 </div>
 <div class="page" id='\"sharePage\"'>
 <div class="page-inner">
 <div class="page-title">שתפו אותנו</div>
-<div class="page-sub">כאן תוסיף תוכן</div>
+<div class="page-sub">שתפו את מספר הוואטסאפ שלנו עם חברים</div>
+<div class="share-card">
+<div class="share-line"><b>וואטסאפ:</b> <span dir="ltr">054-815-1477</span></div>
+<div class="share-actions">
+<button class="action-btn tap white" data-tap="" onclick="shareApp()" type="button">שתף</button>
+<button class="action-btn tap gray" data-tap="" onclick="copyShareText()" type="button">העתק</button>
+</div>
+</div>
+<button class="page-back" onclick="backToMainMenu()" type="button">חזרה</button>
+</div>
+</div>
+<div class="page" id="licenseInfoPage">
+<div class="page-inner">
+<div class="page-title">רוצה להוציא רישיון נהיגה</div>
+<div class="long-text">
+<div class="page-sub" style="margin-top:10px; line-height:1.6;">
+כאן תמצא/י הסבר מסודר על דרגות הרישיון בישראל, מה כל דרגה מאפשרת, ומה תנאי הסף (גיל/שיעורים/קורסים).
+<br/><span style="opacity:.85;">שימו לב: מדובר בדרישות מינימום. בפועל ייתכן ותצטרכו יותר שיעורים לפי קצב ההתקדמות.</span>
+</div>
+<div style="margin-top:14px; display:flex; flex-direction:column; gap:14px;">
+<div style="border:1px solid rgba(127,127,127,.35); border-radius:16px; padding:14px;">
+<div class="section-title" style="font-size:18px; font-weight:900; margin-bottom:8px;">התהליך בקצרה</div>
+<ul style="margin:0; padding:0 18px 0 0; line-height:1.75;">
+<li>ממלאים <b>בקשה להוצאת רישיון נהיגה (טופס ירוק)</b> + בדיקת ראייה/אישור רפואי לפי הנדרש.</li>
+<li>עוברים <b>מבחן עיוני (תיאוריה)</b>.</li>
+<li>מבצעים <b>מינימום שיעורים</b> לפי דרגת הרישיון.</li>
+<li>המורה מבצע/ת <b>מבחן פנימי</b> ומזמין/ה <b>טסט</b>.</li>
+<li>לרישיון ראשון (בעיקר דרגה B): לאחר הטסט נכנסים לתקופת <b>נהג חדש</b>, ולצעירים יש גם <b>ליווי</b> לפי החוק.</li>
+</ul>
+</div>
+<div style="border:1px solid rgba(127,127,127,.35); border-radius:16px; padding:14px;">
+<div class="section-title" style="font-size:18px; font-weight:900; margin-bottom:10px;">קטגוריה A – דו־גלגלי (אופנוע/קטנוע)</div>
+<div style="display:flex; flex-direction:column; gap:10px;">
+<div>
+<div style="font-weight:900;">A2 – קטנוע/אופנוע עד 125 סמ״ק (עד 11kW)</div>
+<div style="opacity:.9; line-height:1.7;">
+          גיל מינימלי לתיאוריה: <b>15.5</b> · התחלת לימוד: <b>16</b> · טסט/קבלת רישיון: <b>16</b><br/>
+          מינימום שיעורים: <b>15</b> (כ־40 דקות לשיעור).
+        </div>
+</div>
+<div>
+<div style="font-weight:900;">A1 – אופנוע עד 35kW (47.46 כ״ס)</div>
+<div style="opacity:.9; line-height:1.7;">
+          גיל מינימלי לתיאוריה: <b>17.5</b> · התחלת לימוד: <b>18</b> · טסט/קבלת רישיון: <b>18</b><br/>
+          מינימום שיעורים: <b>15</b>. לבעלי רישיון <b>A2</b>: מינימום <b>8</b> שיעורים.
+        </div>
+</div>
+<div>
+<div style="font-weight:900;">A – אופנוע ללא הגבלת כוח</div>
+<div style="opacity:.9; line-height:1.7;">
+          לרוב נדרש <b>וותק</b> (לדוגמה: שנה על A1). גיל מינימלי נפוץ: <b>21</b> (עם ותק) או <b>24</b> ללא ותק מתאים.<br/>
+          מינימום שיעורים: לרוב <b>8</b> (בהתאם למסלול/וותק).
+        </div>
+</div>
+</div>
+</div>
+<div style="border:1px solid rgba(127,127,127,.35); border-radius:16px; padding:14px;">
+<div class="section-title" style="font-size:18px; font-weight:900; margin-bottom:10px;">קטגוריה B – רכב פרטי</div>
+<div style="font-weight:900;">B – רכב פרטי עד 3.5 טון (ועד 8 נוסעים, לא כולל נהג)</div>
+<div style="opacity:.9; line-height:1.7; margin-top:6px;">
+      גיל מינימלי לתיאוריה: <b>15.5</b> · התחלת לימוד: <b>16.5</b> · טסט: <b>16 ו־9 חודשים</b><br/>
+      מינימום שיעורים: <b>28</b> (כ־40 דקות לשיעור).
+    </div>
+<div style="margin-top:10px; opacity:.9; line-height:1.7;">
+<b>אחרי הטסט (לרישיון ראשון):</b> מוגדרים <b>נהג חדש</b>. לנהג חדש צעיר קיימת תקופת <b>ליווי 6 חודשים</b>:
+      3 חודשים ראשונים ליווי מלא (יום+לילה) ועוד 3 חודשים ליווי בלילה (21:00–06:00),
+      ובסה״כ <b>50 שעות</b> נהיגה בליווי (20 עירוני, 15 בין־עירוני, 15 לילה).
+    </div>
+</div>
+<div style="border:1px solid rgba(127,127,127,.35); border-radius:16px; padding:14px;">
+<div class="section-title" style="font-size:18px; font-weight:900; margin-bottom:10px;">קטגוריה C – משאיות</div>
+<div style="display:flex; flex-direction:column; gap:10px;">
+<div>
+<div style="font-weight:900;">C1 – משאית עד 12 טון</div>
+<div style="opacity:.9; line-height:1.7;">
+          התחלת לימוד: <b>17</b> · טסט: <b>17.5</b> · קבלת רישיון: <b>18</b><br/>
+          מינימום שיעורים: <b>32</b>. לבעלי רישיון <b>B</b>: מינימום <b>20</b> שיעורים.
+        </div>
+</div>
+<div>
+<div style="font-weight:900;">C – משאית מעל 12 טון / משאית כבדה</div>
+<div style="opacity:.9; line-height:1.7;">
+          בדרך כלל נדרש <b>וותק</b> קודם (לדוגמה: שנה על C1). מספר השיעורים/קורסים משתנים לפי דרישות והמסלול.
+        </div>
+</div>
+<div>
+<div style="font-weight:900;">C+E – גורר (סמיטריילר/גרור כבד)</div>
+<div style="opacity:.9; line-height:1.7;">
+          נדרש בדרך כלל רישיון <b>C</b> ו־<b>וותק</b> מתאים. לעיתים יש דרישות לקורסים/הכשרה מקצועית.
+        </div>
+</div>
+</div>
+<div style="margin-top:10px; opacity:.9; line-height:1.7;">
+<b>שימו לב:</b> ברישיונות מקצועיים נפוצים תנאים נוספים כמו בדיקות רפואיות/ראייה מורחבות והכשרה מקצועית.
+    </div>
+</div>
+<div style="border:1px solid rgba(127,127,127,.35); border-radius:16px; padding:14px;">
+<div class="section-title" style="font-size:18px; font-weight:900; margin-bottom:10px;">קטגוריה D – רכב ציבורי (הסעת נוסעים)</div>
+<div style="opacity:.9; line-height:1.7;">
+      דרגות נפוצות:
+      <b>D1</b> (מונית/רכב ציבורי עד 16 נוסעים), <b>D2/D3</b> (מיניבוס לפי סוג), <b>D</b> (אוטובוס).<br/>
+      ברוב המקרים נדרשים: <b>גיל מינימלי גבוה יותר</b>, <b>וותק נהיגה</b>, בדיקות רפואיות, ולעיתים <b>קורסים מקצועיים</b> (נהג רכב ציבורי).
+    </div>
+</div>
+<div style="opacity:.8; line-height:1.6;">
+    * במידה ואת/ה צריך/ה, אפשר להוסיף כאן בהמשך גם <b>טבלאות מסודרות</b> לכל הדרגות (כולל D2/D3/טרקטור וכו׳) לפי הנתונים הרשמיים.
+  </div>
+</div>
+</div>
 </div>
 </div>
 <div class="page" id="safetyRulesPage">
@@ -691,34 +770,91 @@
 </div>
 </div>
 <div class="page" id="theoryStudyPage"><div class="page-inner"><div class="page-title">לימוד תאוריה</div><div class="page-sub">כאן תוסיף תוכן</div></div></div>
-<div class="page" id="bookTestPage">
+<div class="page" id="approachTestPage"><div class="page-inner">
+<div class="page-title">ניגשים לטסט</div>
+<div class="long-text">
+<h3>מה מחפשים בטסט (הכי חשוב)</h3>
+<ul>
+<li><b>בקרה ובטיחות:</b> יציבות, שליטה בבלמים, תכנון מראש, החלטות רגועות.</li>
+<li><b>תצפיות:</b> מראות + שטחים מתים. <b>הסתכלות עם הראש הכי חשובה</b> – שהבוחן יראה את זה.</li>
+<li><b>נתיב ומיקום:</b> לא “לטייל” בין נתיבים, שמירה על קו נסיעה נקי.</li>
+<li><b>מהירות מותאמת:</b> לא מהיר מדי ולא איטי מדי – להתאים לתנאים.</li>
+</ul>
+<h3>טסט פנימי – מסלול (5 חלקים)</h3>
+<ul>
+<li>נסיעה איטית בקו ישר</li>
+<li>סללום סימטרי</li>
+<li>סללום א-סימטרי</li>
+<li>נסיעה מהירה: העלאת/הורדת הילוך (בידני) + עצירה מבוקרת עם <b>2 בלמים</b></li>
+<li>שמיניות – עד שהבוחן אומר להפסיק</li>
+</ul>
+<div class="warn">
+<b>טעות שמכשילה:</b> <b>הורדת רגל לא מבוקרת</b> (נפילה/תמיכה “בבהלה”) יכולה להיחשב ככישלון.
+      </div>
+<h3>טסט בחוץ – נקודות שהבוחן “אוהב” לבדוק</h3>
+<ul>
+<li><b>פניות שמאלה 90°:</b> לא לעלות לנתיב הנגדי, גם לא “טיפה”.</li>
+<li><b>עצירות אסורות:</b> לא לעצור בתחנת אוטובוס, ולא לעצור על כחול-לבן.</li>
+<li><b>עצירה/השתלבות:</b> עצירה מלאה במקום שצריך + הסתכלות עם הראש לפני יציאה.</li>
+</ul>
+<h3>איך לא להיכשל בטסט (טיפים חדים)</h3>
+<ul>
+<li><b>מבט רחוק:</b> לא “להינעל” על הכביש ליד הגלגל.</li>
+<li><b>מראות + ראש:</b> תבדוק מראות – אבל <b>תראה עם הראש</b> שטח מת לפני תמרון/סטייה.</li>
+<li><b>איתות:</b> לא רק להדליק – גם לבטל בזמן.</li>
+<li><b>עצירה מלאה:</b> תן לבוחן “להרגיש” שעצרת.</li>
+<li><b>קור רוח:</b> טעית? אל תיבהל. תתקן בצורה בטוחה ולא חדה.</li>
+</ul>
+<div class="warn">
+<b>מה אסור לעשות:</b> חיתוך נתיב, בלימות בהלה, יציאה בלי בדיקת ראש, עצירה במקום אסור, פנייה שמאלה רחבה לנתיב נגדי.
+    </div>
+</div>
+</div></div><div class="page" id="bookTestPage">
 <div class="page-inner">
 <div class="page-title">הזמנת טסט</div>
-<div class="page-sub">הטסט עולה <b>400₪</b>. אם יש לך מספיק יתרה, בלחיצה על "הזמן טסט" יתבצע חיוב מהיתרה.</div>
+<div class="page-sub">הזמנה עולה 400₪ ומנוכה מהיתרה.</div>
 <div class="bt-box">
-<div class="bt-row"><span class="k">יתרה נוכחית</span><span class="v" id="btBalance">—</span></div>
-<div class="bt-row"><span class="k">סטטוס הזמנה</span><span class="v" id="btStatus">—</span></div>
+<div class="bt-row">
+<div class="k">יתרה</div>
+<div class="v" id="btBalance">—</div>
+</div>
+<div class="bt-row">
+<div class="k">סטטוס</div>
+<div class="v" id="btStatus">—</div>
+</div>
+<div class="bt-row">
+<div class="k">תאריך ושעה במערכת</div>
+<div class="v" id="btSystemTestDt">—</div>
+</div>
 </div>
 <button class="bt-order-btn tap" data-tap="" id="btOrderBtn" type="button">הזמן טסט (400₪)</button>
-<div class="bt-note">לאחר ההזמנה, הסכום ירד מהיתרה שלך.</div>
+<div class="bt-note">לאחר הזמנה המזכירה תקבע תאריך ושעה ותעדכן במערכת.</div>
 </div>
 </div>
-<!-- Book Test: insufficient balance modal -->
-<div aria-hidden="true" class="overlay" id="btInsufficientOverlay">
-<div aria-modal="true" class="bt-modal" onclick="event.stopPropagation()" role="dialog">
-<div class="bt-modal-title">אין מספיק יתרה בחשבון</div>
-<div class="bt-modal-text" id="btInsufficientText">—</div>
-<button class="bt-modal-close tap" data-tap="" id="btInsufficientClose" type="button">סגור</button>
+<div class="overlay overlay-dim" id="btInsufficientOverlay" onclick="closeOverlay('btInsufficientOverlay')">
+<div class="bt-modal" onclick="event.stopPropagation()">
+<div class="bt-modal-title">אין מספיק יתרה</div>
+<div class="bt-modal-text" id="btInsufficientText">אין מספיק יתרה בחשבון.</div>
+<button class="leave-msg-btn tap" data-tap="" id="btInsufficientClose" type="button">סגור</button>
 </div>
 </div>
-<!-- Book Test: already ordered modal -->
-<div aria-hidden="true" class="overlay" id="btAlreadyOverlay">
-<div aria-modal="true" class="bt-modal" onclick="event.stopPropagation()" role="dialog">
-<div class="bt-modal-title">כבר הוזמן טסט</div>
-<div class="bt-modal-text" id="btAlreadyText">יש כבר טסט מוזמן במערכת. תקבל תאריך בימים הקרובים.</div>
-<button class="bt-modal-close tap" data-tap="" id="btAlreadyClose" type="button">סגור</button>
+<div class="overlay overlay-dim" id="btAlreadyOverlay" onclick="closeOverlay('btAlreadyOverlay')">
+<div class="bt-modal" onclick="event.stopPropagation()">
+<div class="bt-modal-title">לא ניתן להזמין טסט</div>
+<div class="bt-modal-text" id="btAlreadyText">יש כבר טסט מוזמן במערכת.</div>
+<button class="leave-msg-btn tap" data-tap="" id="btAlreadyClose" type="button">סגור</button>
 </div>
 </div>
+
+<div class="overlay" id="contactOverlay" onclick="closePopup()">
+<div class="popup-box" onclick="event.stopPropagation()">
+</div>
+</div>
+<div class="popup-item tap" data-tap="" onclick="openWhatsApp()">
+<img alt="וואטסאפ" src="whatsapp_icon.png"/>
+<div class="popup-label">וואטסאפ</div>
+</div>
+
 <div class="page" id="infoPage">
 <div class="page-inner">
 <div class="page-title" data-i18n="page_info_title">מידע</div>
@@ -751,18 +887,9 @@
 </div>
 </div>
 </div>
-<div class="overlay" id="contactOverlay" onclick="closePopup()">
-<div class="popup-box" onclick="event.stopPropagation()">
-</div>
-</div>
-<div class="popup-item tap" data-tap="" onclick="openWhatsApp()">
-<img alt="וואטסאפ" src="whatsapp_icon.png"/>
-<div class="popup-label">וואטסאפ</div>
-</div>
-</div>
-</div>
-</div>
-</div>
+
+
+
 <div class="overlay" id="leaveMessageOverlay" onclick="closeOverlay('leaveMessageOverlay')">
 <div class="popup-box leave-msg-box" onclick="event.stopPropagation()">
 <div class="popup-title">שליחת הודעה</div>
@@ -849,17 +976,14 @@
 <div class="settings-section-title" data-i18n="settings_accessibility_title">נגישות</div>
 <div class="setting-row">
 <div class="setting-label" data-i18n="settings_text_size_label">גודל טקסט:</div>
-<div aria-label="Text size" class="segmented" role="radiogroup">
-<button class="seg-btn" data-i18n="text_sm" data-text-size="sm" type="button">קטן</button>
-<button class="seg-btn" data-i18n="text_md" data-text-size="md" type="button">רגיל</button>
-<button class="seg-btn" data-i18n="text_lg" data-text-size="lg" type="button">גדול</button>
+<div aria-label="Text size slider" class="text-scale-wrap">
+<input class="text-scale-range" id="textScaleRange" max="140" min="80" step="1" type="range" value="100"/>
+<div class="text-scale-meta">
+<span class="text-scale-min">80%</span>
+<span class="text-scale-val" id="textScaleValue">100%</span>
+<span class="text-scale-max">140%</span>
 </div>
 </div>
-<div class="toggle-row">
-<span class="toggle-label" data-i18n="acc_high_contrast">ניגודיות גבוהה</span>
-<button aria-pressed="false" class="toggle" data-toggle="highContrast" type="button">
-<span class="toggle-knob"></span>
-</button>
 </div>
 <div class="toggle-row">
 <span class="toggle-label" data-i18n="acc_reduce_motion">הפחתת אנימציות</span>
@@ -928,12 +1052,12 @@
 <div class="page-inner">
 <div class="page-title">מידע לתלמיד</div>
 <div class="info-menu-buttons info-square-grid">
-<button class="submenu-btn info-square-btn tap" data-tap="" onclick="openPage('learnWhatPage')">רוצה להוציא<br/>רישיון נהיגה</button>
-<button class="submenu-btn info-square-btn tap" data-tap="" onclick="openPage('feesPage')">תהליך<br/>הלמידה</button>
-<button class="submenu-btn info-square-btn tap" data-tap="" onclick="openPage('bookTestPage')">ניגשים<br/>לטסט</button>
-<button class="submenu-btn info-square-btn tap" data-tap="" onclick="openPage('passedTestPage')">עברתי<br/>טסט</button>
-<button class="submenu-btn info-square-btn tap" data-tap="" onclick="openPage('safetyRulesPage')">חוקים<br/>ובטיחות</button>
-<button class="submenu-btn info-square-btn tap" data-tap="" onclick="openPage('passTestHowPage')">קניית רכב<br/>ראשון</button>
+<button class="submenu-btn info-square-btn tap" data-tap="" onclick="openPage('licenseInfoPage')">רוצה להוציא<br>רישיון נהיגה</br></button>
+<button class="submenu-btn info-square-btn tap" data-tap="" onclick="openPage('learnWhatPage')">תהליך<br>הלמידה</br></button>
+<button class="submenu-btn info-square-btn tap" data-tap="" onclick="openPage('approachTestPage')">ניגשים<br>לטסט</br></button>
+<button class="submenu-btn info-square-btn tap" data-tap="" onclick="openPage('passedTestPage')">עברתי<br>טסט</br></button>
+<button class="submenu-btn info-square-btn tap" data-tap="" onclick="openPage('safetyRulesPage')">חוקים<br>ובטיחות</br></button>
+<button class="submenu-btn info-square-btn tap" data-tap="" onclick="openPage('passTestHowPage')">קניית רכב<br>ראשון</br></button>
 </div>
 </div>
 </div><div class="page" id="learnWhatPage">
@@ -972,44 +1096,7 @@
 </div>
 <div class="page" id="passTestHowPage">
 <div class="page-inner">
-<div class="page-title">איך עוברים טסט</div>
-<div class="long-text">
-<h3>מה מחפשים בטסט (הכי חשוב)</h3>
-<ul>
-<li><b>בקרה ובטיחות:</b> יציבות, שליטה בבלמים, תכנון מראש, החלטות רגועות.</li>
-<li><b>תצפיות:</b> מראות + שטחים מתים. <b>הסתכלות עם הראש הכי חשובה</b> – שהבוחן יראה את זה.</li>
-<li><b>נתיב ומיקום:</b> לא “לטייל” בין נתיבים, שמירה על קו נסיעה נקי.</li>
-<li><b>מהירות מותאמת:</b> לא מהיר מדי ולא איטי מדי – להתאים לתנאים.</li>
-</ul>
-<h3>טסט פנימי – מסלול (5 חלקים)</h3>
-<ul>
-<li>נסיעה איטית בקו ישר</li>
-<li>סללום סימטרי</li>
-<li>סללום א-סימטרי</li>
-<li>נסיעה מהירה: העלאת/הורדת הילוך (בידני) + עצירה מבוקרת עם <b>2 בלמים</b></li>
-<li>שמיניות – עד שהבוחן אומר להפסיק</li>
-</ul>
-<div class="warn">
-<b>טעות שמכשילה:</b> <b>הורדת רגל לא מבוקרת</b> (נפילה/תמיכה “בבהלה”) יכולה להיחשב ככישלון.
-      </div>
-<h3>טסט בחוץ – נקודות שהבוחן “אוהב” לבדוק</h3>
-<ul>
-<li><b>פניות שמאלה 90°:</b> לא לעלות לנתיב הנגדי, גם לא “טיפה”.</li>
-<li><b>עצירות אסורות:</b> לא לעצור בתחנת אוטובוס, ולא לעצור על כחול-לבן.</li>
-<li><b>עצירה/השתלבות:</b> עצירה מלאה במקום שצריך + הסתכלות עם הראש לפני יציאה.</li>
-</ul>
-<h3>איך לא להיכשל בטסט (טיפים חדים)</h3>
-<ul>
-<li><b>מבט רחוק:</b> לא “להינעל” על הכביש ליד הגלגל.</li>
-<li><b>מראות + ראש:</b> תבדוק מראות – אבל <b>תראה עם הראש</b> שטח מת לפני תמרון/סטייה.</li>
-<li><b>איתות:</b> לא רק להדליק – גם לבטל בזמן.</li>
-<li><b>עצירה מלאה:</b> תן לבוחן “להרגיש” שעצרת.</li>
-<li><b>קור רוח:</b> טעית? אל תיבהל. תתקן בצורה בטוחה ולא חדה.</li>
-</ul>
-<div class="warn">
-<b>מה אסור לעשות:</b> חיתוך נתיב, בלימות בהלה, יציאה בלי בדיקת ראש, עצירה במקום אסור, פנייה שמאלה רחבה לנתיב נגדי.
-      </div>
-</div>
+<div class="page-title">קניית רכב ראשון</div>
 </div>
 </div>
 <div class="page" id="passedTestPage">
@@ -1280,7 +1367,7 @@
 <tr><td class="k">סוג רישיון</td><td id="spLicense">—</td></tr>
 <tr><td class="k">ת״ז</td><td id="spId">—</td></tr>
 <tr><td class="k">מספר פלאפון</td><td class="v"><span id="spPhone">—</span></td></tr>
-<tr><td class="k">תאריך לטסט</td><td class="v"><div id="spTestDate">—</div><div id="spTestTime" class="sp-test-time">—</div></td></tr>
+<tr><td class="k">תאריך לטסט</td><td class="v"><div id="spTestDate">—</div><div class="sp-test-time" id="spTestTime">—</div></td></tr>
 <tr><td class="k">מס׳ שיעורים שבוצעו</td><td id="spLessonsDone">—</td></tr>
 <tr><td class="k">יתרה (₪)</td><td id="spBalanceMoney">—</td></tr>
 <tr><td class="k">כמות טסטים שביצע</td><td id="spTestsTaken">—</td></tr>
@@ -1380,6 +1467,7 @@
 <div aria-label="פתח פרופיל תלמיד" class="quick-hit" id="quickHit" role="button" tabindex="0"></div>
 <div class="msg" id="msgBox"></div>
 <div aria-label="טבלת שיעורים" class="queue" id="queueWrap">
+<div aria-label="מספור תלמידים על המגרש" class="yard-counter" id="adminYardCounter"></div>
 <div aria-label="גלילת טבלה" class="queue-scroll">
 <table aria-label="טבלת תלמידים" class="queue-table">
 <thead>
@@ -1537,28 +1625,27 @@
 </div>
 </div>
 </div>
-
 <div aria-hidden="true" class="modalBackdrop" id="secTxHistoryModal">
-  <div aria-label="היסטוריית עסקאות" aria-modal="true" class="modalBox" role="dialog">
-    <div class="modalTitle">היסטוריית עסקאות</div>
-    <div class="modalText" id="secTxHistorySub">רשימת העסקאות של התלמיד.</div>
-    <div style="max-height: 60vh; overflow:auto; border:1px solid rgba(255,255,255,0.08); border-radius:12px; margin-top:10px;">
-      <table aria-label="טבלת עסקאות" class="sp-table" style="width:100%;">
-        <thead>
-          <tr>
-            <td class="k" style="font-weight:700;">תאריך</td>
-            <td class="k" style="font-weight:700;">סוג</td>
-            <td class="k" style="font-weight:700;">סכום</td>
-            <td class="k" style="font-weight:700;">הערה</td>
-          </tr>
-        </thead>
-        <tbody id="secTxHistoryTbody"></tbody>
-      </table>
-    </div>
-    <div class="timerModalBtns" style="margin-top:12px;">
-      <button class="btnSmall" id="secTxHistoryClose" type="button">סגירה</button>
-    </div>
-  </div>
+<div aria-label="היסטוריית עסקאות" aria-modal="true" class="modalBox" role="dialog">
+<div class="modalTitle">היסטוריית עסקאות</div>
+<div class="modalText" id="secTxHistorySub">רשימת העסקאות של התלמיד.</div>
+<div style="max-height: 60vh; overflow:auto; border:1px solid rgba(255,255,255,0.08); border-radius:12px; margin-top:10px;">
+<table aria-label="טבלת עסקאות" class="sp-table" style="width:100%;">
+<thead>
+<tr>
+<td class="k" style="font-weight:700;">תאריך</td>
+<td class="k" style="font-weight:700;">סוג</td>
+<td class="k" style="font-weight:700;">סכום</td>
+<td class="k" style="font-weight:700;">הערה</td>
+</tr>
+</thead>
+<tbody id="secTxHistoryTbody"></tbody>
+</table>
+</div>
+<div class="timerModalBtns" style="margin-top:12px;">
+<button class="btnSmall" id="secTxHistoryClose" type="button">סגירה</button>
+</div>
+</div>
 </div>
 <!-- ===== /ADMIN OVERLAY ===== -->
 <!-- ===== MANAGER OVERLAY (new, separate) ===== -->
@@ -1603,24 +1690,108 @@
 </div>
 <!-- PAYMENTS VIEW -->
 <div aria-hidden="true" class="mgr-view" id="mgrViewPayments">
-<div class="mgr-pay-top">
-<button class="mgr-home-btn" id="mgrOpenCashGeneralBtn" type="button">קופה כללית</button>
-<button class="mgr-home-btn" id="mgrOpenCashShopBtn" type="button">קופה חנות</button>
-</div>
-<div class="mgr-pay-bottom">
-<div class="mgr-pay-bottom-title">תשלומים אחרונים</div>
-<div class="mgr-table-wrap-dark">
-<table class="mgr-table-dark">
-<thead>
-<tr>
-<th>קבלה</th>
-<th>סכום</th>
-<th>תאריך ושעה</th>
-</tr>
-</thead>
-<tbody id="mgrRecentPaysTbody"></tbody>
-</table>
-</div>
+<div class="mgr-paydash" dir="rtl">
+  <div class="mgr-paydash-controls">
+    <div class="mgr-paydash-left">
+      <select id="mgrPayPeriod" class="mgr-paydash-select">
+        <option value="daily">יומי</option>
+        <option value="weekly">שבועי</option>
+        <option value="monthly">חודשי</option>
+        <option value="yearly">שנתי</option>
+      </select>
+      <input id="mgrPayAnchorDate" class="mgr-paydash-date" type="date" />
+      <button id="mgrPayPrev" class="mgr-paydash-nav" type="button" aria-label="קודם">‹</button>
+      <button id="mgrPayNext" class="mgr-paydash-nav" type="button" aria-label="הבא">›</button>
+      <button id="mgrPayToday" class="mgr-paydash-btn" type="button">היום</button>
+    </div>
+    <div class="mgr-paydash-right">
+      <div id="mgrPayRangeLabel" class="mgr-paydash-range"></div>
+    </div>
+  </div>
+
+  <div class="mgr-paydash-kpis">
+    <div class="mgr-kpi-card">
+      <div class="mgr-kpi-label">סה״כ</div>
+      <div class="mgr-kpi-value" id="mgrKpiTotal">₪0</div>
+      <div class="mgr-kpi-sub" id="mgrKpiCount">0 תשלומים</div>
+    </div>
+    <div class="mgr-kpi-card">
+      <div class="mgr-kpi-label">מזומן</div>
+      <div class="mgr-kpi-value" id="mgrKpiCash">₪0</div>
+      <div class="mgr-kpi-sub" id="mgrKpiCashPct">0%</div>
+    </div>
+    <div class="mgr-kpi-card">
+      <div class="mgr-kpi-label">אשראי</div>
+      <div class="mgr-kpi-value" id="mgrKpiCredit">₪0</div>
+      <div class="mgr-kpi-sub" id="mgrKpiCreditPct">0%</div>
+    </div>
+    <div class="mgr-kpi-card">
+      <div class="mgr-kpi-label">בית ספר</div>
+      <div class="mgr-kpi-value" id="mgrKpiSchool">₪0</div>
+      <div class="mgr-kpi-sub">סה״כ בתקופה</div>
+    </div>
+    <div class="mgr-kpi-card">
+      <div class="mgr-kpi-label">חנות</div>
+      <div class="mgr-kpi-value" id="mgrKpiShop">₪0</div>
+      <div class="mgr-kpi-sub">סה״כ בתקופה</div>
+    </div>
+  </div>
+
+  <div class="mgr-paydash-split">
+    <div class="mgr-paydash-section-title">פילוח מהיר</div>
+    <div class="mgr-paydash-split-grid">
+      <div class="mgr-split-card">
+        <div class="mgr-split-title">בית ספר</div>
+        <div class="mgr-split-row"><span>סה״כ</span><b id="mgrSplitSchoolTotal">₪0</b></div>
+        <div class="mgr-split-row"><span>מזומן</span><b id="mgrSplitSchoolCash">₪0</b></div>
+        <div class="mgr-split-row"><span>אשראי</span><b id="mgrSplitSchoolCredit">₪0</b></div>
+      </div>
+      <div class="mgr-split-card">
+        <div class="mgr-split-title">חנות</div>
+        <div class="mgr-split-row"><span>סה״כ</span><b id="mgrSplitShopTotal">₪0</b></div>
+        <div class="mgr-split-row"><span>מזומן</span><b id="mgrSplitShopCash">₪0</b></div>
+        <div class="mgr-split-row"><span>אשראי</span><b id="mgrSplitShopCredit">₪0</b></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mgr-paydash-table">
+    <div class="mgr-paydash-table-head">
+      <div class="mgr-paydash-section-title">תנועות</div>
+      <div class="mgr-paydash-filters">
+        <select id="mgrPayFilterDomain" class="mgr-paydash-select-sm">
+          <option value="all">הכל</option>
+          <option value="school">בית ספר</option>
+          <option value="shop">חנות</option>
+        </select>
+        <select id="mgrPayFilterMethod" class="mgr-paydash-select-sm">
+          <option value="all">כל האמצעים</option>
+          <option value="cash">מזומן</option>
+          <option value="credit">אשראי</option>
+          <option value="unknown">לא ידוע</option>
+        </select>
+        <input id="mgrPaySearch" class="mgr-paydash-search" type="text" autocomplete="off" placeholder="חיפוש קבלה / הערה" />
+      </div>
+    </div>
+
+    <div class="mgr-table-wrap-dark mgr-paydash-txwrap">
+      <table class="mgr-table-dark mgr-paydash-txtable">
+        <thead>
+          <tr>
+            <th>תאריך</th>
+            <th>קבלה</th>
+            <th>מקור</th>
+            <th>אמצעי</th>
+            <th>סכום</th>
+            <th>הערה</th>
+          </tr>
+        </thead>
+        <tbody id="mgrPayTxTbody">
+          <tr><td colspan="6" style="text-align:center;opacity:.85;">אין תשלומים</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
 </div>
 </div>
 <!-- ORDERS VIEW -->
@@ -1714,8 +1885,8 @@
 <input accept="image/*" class="mgr-input-dark mgr-file mgr-hidden-file" id="mgrProdImgFile" type="file"/>
 </div>
 <input id="mgrProdImg" type="hidden"/>
-<input id="mgrProdImgs" type="hidden">
-</input></div>
+<input id="mgrProdImgs" type="hidden"/>
+</div>
 <div class="mgr-row-dark">
 <div aria-label="תמונות מוצר" class="mgr-imgthumbs" id="mgrProdImgThumbs"></div>
 </div>

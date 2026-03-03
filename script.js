@@ -975,6 +975,101 @@ function openWhatsApp(){
   window.open("https://wa.me/972548151477", "_blank");
 }
 
+
+// Share app / contact (cross-platform)
+var __APP_SHARE_TITLE = "אור ירוק";
+var __APP_SHARE_TEXT = "אור ירוק - בית ספר לאופנועים\nדברו איתנו בוואטסאפ:";
+var __APP_SHARE_URL  = "https://wa.me/972548151477";
+
+function __getShareMessage(){
+  try{ return (__APP_SHARE_TEXT + "\n" + __APP_SHARE_URL).trim(); }catch(e){ return __APP_SHARE_URL; }
+}
+
+async function shareApp(){
+  var msg = __getShareMessage();
+  var payload = { title: __APP_SHARE_TITLE, text: __APP_SHARE_TEXT, url: __APP_SHARE_URL };
+
+  // Prefer native share when running inside Capacitor (if plugin exists)
+  try{
+    var cap = window.Capacitor;
+    var Share = cap && cap.Plugins && cap.Plugins.Share;
+    if(Share && typeof Share.share === "function"){
+      await Share.share({ title: __APP_SHARE_TITLE, text: __APP_SHARE_TEXT, url: __APP_SHARE_URL, dialogTitle: __APP_SHARE_TITLE });
+      try{ if(typeof toast === "function") toast("נפתח שיתוף"); }catch(e){}
+      return;
+    }
+  }catch(e){}
+
+  // Web Share API (works in many modern browsers)
+  try{
+    if(navigator && typeof navigator.share === "function"){
+      await navigator.share(payload);
+      try{ if(typeof toast === "function") toast("נפתח שיתוף"); }catch(e){}
+      return;
+    }
+  }catch(e){
+    // fall through
+  }
+
+  // Fallback 1: open WhatsApp with prefilled text (always does something)
+  try{
+    var waUrl = "https://wa.me/?text=" + encodeURIComponent(msg);
+    window.open(waUrl, "_blank");
+    return;
+  }catch(e){}
+
+  // Fallback 2: copy to clipboard
+  try{
+    await copyShareText(false);
+    return;
+  }catch(e){}
+
+  // Last resort
+  try{ alert(msg); }catch(e){}
+}
+
+async function copyShareText(silent){
+  var msg = __getShareMessage();
+
+  // Clipboard API (secure contexts)
+  try{
+    if(navigator && navigator.clipboard && typeof navigator.clipboard.writeText === "function"){
+      await navigator.clipboard.writeText(msg);
+      if(!silent) try{ if(typeof toast === "function") toast("הועתק ללוח"); }catch(e){}
+      return true;
+    }
+  }catch(e){}
+
+  // execCommand fallback (older WebViews)
+  try{
+    var ta = document.createElement("textarea");
+    ta.value = msg;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.opacity = "0";
+    ta.style.left = "-9999px";
+    ta.style.top = "0";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    ta.setSelectionRange(0, ta.value.length);
+    var ok = false;
+    try{ ok = document.execCommand("copy"); }catch(e2){}
+    document.body.removeChild(ta);
+    if(ok){
+      if(!silent) try{ if(typeof toast === "function") toast("הועתק ללוח"); }catch(e){}
+      return true;
+    }
+  }catch(e){}
+
+  // Last fallback: show message to user to manually copy
+  try{
+    if(!silent) prompt("העתק/י את הטקסט:", msg);
+  }catch(e){}
+  return false;
+}
+
+
 function resetMenuItems(){
   var items=document.querySelectorAll('#sideMenu .menu-item');
   for(var i=0;i<items.length;i++) items[i].classList.remove('menu-in');
@@ -4964,7 +5059,144 @@ function payClearPackSelection(){
     }catch(e){}
   }
 
-  function payAddReceipt(u, amount, note, lessonsAdded){
+  
+/* ===== TAX DOCS (Receipts) v1 =====
+   - Creates immutable "קבלה ממוחשבת" records from successful payments WITHOUT affecting payment pipeline.
+   - Storage: localStorage (via DBStorage when available) under:
+       tax_docs_v1 (array, newest first)
+       tax_docs_seq_v1 (running receipt number)
+   - Optional Firebase hook (no hard dependency):
+       If window.FirebaseTaxDocs.onNewTaxDoc exists, it will be called with the created doc.
+*/
+(function(){
+  if(window.TaxDocs) return;
+
+  function _ls(){
+    try{ return (window.DBStorage && typeof DBStorage.getItem === 'function') ? DBStorage : localStorage; }catch(e){ return null; }
+  }
+  function _getJSON(k, def){
+    var s, ls=_ls(); if(!ls) return def;
+    try{ s = ls.getItem(k); }catch(e){ return def; }
+    if(!s) return def;
+    try{ return JSON.parse(s); }catch(e){ return def; }
+  }
+  function _setJSON(k, v){
+    var ls=_ls(); if(!ls) return false;
+    try{ ls.setItem(k, JSON.stringify(v)); return true; }catch(e){ return false; }
+  }
+
+  var KEY_LIST = "tax_docs_v1";
+  var KEY_SEQ  = "tax_docs_seq_v1";
+
+  function nextDocNumber(){
+    var ls=_ls(); if(!ls) return 1;
+    var n = 0;
+    try{ n = Number(ls.getItem(KEY_SEQ)||0); }catch(e){ n = 0; }
+    if(!isFinite(n) || n < 0) n = 0;
+    n = (n|0) + 1;
+    try{ ls.setItem(KEY_SEQ, String(n)); }catch(e){}
+    return n;
+  }
+
+  function normalizePhone(p){
+    p = String(p||"").trim();
+    if(!p) return "";
+    // keep digits + leading +
+    var plus = p[0] === "+";
+    var dig = p.replace(/[^\d]/g,"");
+    if(plus) return "+" + dig;
+    return dig;
+  }
+
+  function buildDocFromReceipt(receipt){
+    var ts = Number(receipt && receipt.ts);
+    if(!isFinite(ts)) ts = Date.now();
+
+    var docNumber = nextDocNumber();
+    var docId = "taxdoc_" + docNumber + "_" + ts + "_" + Math.floor(Math.random()*100000);
+
+    // Try to enrich customer contact from existing profile (best-effort, no assumptions)
+    var tz = String(receipt && receipt.user || "").trim();
+    var email = "", phone = "";
+    try{
+      if(tz){
+        var prof = null;
+        try{ prof = (typeof payLsGet === "function") ? payLsGet(payKeyProfile(tz), null) : null; }catch(e){ prof = null; }
+        if(prof && typeof prof === "object"){
+          email = String(prof.email || prof.mail || "").trim();
+          phone = String(prof.phone || prof.mobile || "").trim();
+        }
+      }
+    }catch(e){}
+
+    var doc = {
+      id: docId,
+      docType: "receipt",
+      label: "מסמך ממוחשב",
+      number: docNumber,
+      ts: ts,
+      issuedAt: (new Date(ts)).toISOString(),
+      customer: {
+        tz: tz,
+        email: email,
+        phone: normalizePhone(phone)
+      },
+      payment: {
+        receiptId: String(receipt && receipt.id || ""),
+        amount: Number(receipt && receipt.amount || 0),
+        note: String(receipt && receipt.note || "תשלום")
+      },
+      // PDF generation/sending is handled by external layer (Firebase/Server) if available.
+      pdf: { status: "pending" }
+    };
+
+    return doc;
+  }
+
+  function storeDoc(doc){
+    var list = _getJSON(KEY_LIST, []);
+    if(!Array.isArray(list)) list = [];
+    list.unshift(doc);
+    if(list.length > 2000) list.length = 2000;
+    _setJSON(KEY_LIST, list);
+  }
+
+  function tryFirebaseHook(doc){
+    try{
+      if(window.FirebaseTaxDocs && typeof window.FirebaseTaxDocs.onNewTaxDoc === "function"){
+        window.FirebaseTaxDocs.onNewTaxDoc(doc);
+      }
+    }catch(e){}
+  }
+
+  function createFromReceipt(receipt){
+    try{
+      if(!receipt || typeof receipt !== "object") return null;
+      var doc = buildDocFromReceipt(receipt);
+      storeDoc(doc);
+      tryFirebaseHook(doc);
+      return doc;
+    }catch(e){
+      return null;
+    }
+  }
+
+  // Public API
+  window.TaxDocs = {
+    createFromReceipt: createFromReceipt,
+    list: function(){ return _getJSON(KEY_LIST, []); },
+    getByNumber: function(n){
+      n = Number(n); if(!isFinite(n)) return null;
+      var list = _getJSON(KEY_LIST, []);
+      if(!Array.isArray(list)) return null;
+      for(var i=0;i<list.length;i++){ if(Number(list[i] && list[i].number) === n) return list[i]; }
+      return null;
+    }
+  };
+})();
+
+
+function payAddReceipt(u, amount, note, lessonsAdded){
     var ts = Date.now();
     var receipt = {
       id: "pay_" + ts + "_" + Math.floor(Math.random()*100000),
@@ -5046,6 +5278,14 @@ pay.lastPayment = payFmtDateTime(ts);
       ap.paymentsLog.unshift(receipt);
       if(ap.paymentsLog.length > 600) ap.paymentsLog.length = 600;
       payLsSet("admin_profile", ap);
+    }catch(e){}
+
+    
+    // Create immutable "מסמך ממוחשב" record (best-effort, must not affect payment flow)
+    try{
+      if(window.TaxDocs && typeof window.TaxDocs.createFromReceipt === "function"){
+        receipt.taxDoc = window.TaxDocs.createFromReceipt(receipt);
+      }
     }catch(e){}
 
     return receipt;
@@ -6876,18 +7116,31 @@ var __skipDockFocus = false;
 
 
   function goToPayLessonFromCosts(){
+    // From license request flow: open payment (not student profile)
     try{ window.__afterLoginOpenPayLesson = true; }catch(e){}
     try{ window.__licensePaymentFlow = true; }catch(e){}
     try{
       if(typeof window.requireStudentLogin === "function"){
-        window.requireStudentLogin("studentProfilePage");
+        window.requireStudentLogin("licenseRequestPage");
+        // If already logged-in, requireStudentLogin opens the page immediately and loginSuccess won't run,
+        // so open payment explicitly (but not while auth overlay is open).
+        setTimeout(function(){
+          try{
+            if(!document.body.classList.contains("auth-open")){
+              try{ openPage("licenseRequestPage"); }catch(e){}
+              openPaymentModal("", "תשלום על שיעור", true);
+              try{ window.__afterLoginOpenPayLesson = false; }catch(e){}
+            }
+          }catch(e){}
+        }, 220);
       }else{
-        openPage("studentProfilePage", true);
+        openPage("licenseRequestPage", true);
+        setTimeout(function(){ try{ openPaymentModal("", "תשלום על שיעור", true); }catch(e){} }, 220);
       }
     }catch(e2){
-      try{ openPage("studentProfilePage", true); }catch(e3){}
+      try{ openPage("licenseRequestPage", true); }catch(e3){}
+      setTimeout(function(){ try{ openPaymentModal("", "תשלום על שיעור", true); }catch(e4){} }, 220);
     }
-    // Auto-open payment on login was removed (only open on explicit user action)
   }
 
   function showUserPass(){
@@ -8641,11 +8894,14 @@ if(_adminTab==='lessons'){
           return `${hh}:${mm}`;
         }catch(e){ return ''; }
       })();
+      const sysInfo = (typeof _btGetSystemTestInfo==="function") ? _btGetSystemTestInfo(tz) : {has:false, display:""};
+      const sysDisp = (sysInfo && sysInfo.has && sysInfo.display) ? sysInfo.display : "";
       parts.push(`
         <div class="lesson-file" style="padding:10px 12px;">
           <div class="meta">
             <div class="title">${esc(nm)} • ${esc(tz)}</div>
-            <div class="sub">${t} • ${price}₪</div>
+            <div class="sub">${(sysDisp ? (sysDisp + " • ") : "")}${price}₪</div>
+            <div class="sub" style="opacity:.85">הוזמן: ${t}</div>
           </div>
         </div>
       `);
@@ -8664,6 +8920,8 @@ if(_adminTab==='lessons'){
       const nm = (r.name || '—');
       const tz = (r.tz || '—');
       const price = (Number(r.price)||400);
+      const sysInfo = (typeof _btGetSystemTestInfo==="function") ? _btGetSystemTestInfo(tz) : {has:false, display:""};
+      const sysDisp = (sysInfo && sysInfo.has && sysInfo.display) ? sysInfo.display : "";
       const t = (function(){
         try{
           const d = new Date(Number(r.orderedAt||0));
@@ -8672,7 +8930,7 @@ if(_adminTab==='lessons'){
           return `${hh}:${mm}`;
         }catch(e){ return ''; }
       })();
-      lines.push(`${t} | ${tz} | ${nm} | ${price}₪`);
+      lines.push(`${t} | ${tz} | ${nm} | ${price}₪${sysDisp ? (" | טסט: " + sysDisp) : ""}`);
     }
     return lines.join('\n');
   }
@@ -8724,6 +8982,7 @@ try{ window.renderTestOrdersFiles = renderTestOrdersFiles; }catch(e){}
   const btnLogout = $('btnLogout');
   const msgBox = $('msgBox');
   const queueBody = $('queueBody');
+  const yardCounter = $('adminYardCounter');
 
   const quickHit = $('quickHit');
   const resultBox = $('resultBox');
@@ -10076,10 +10335,28 @@ function tickTimers() {
 
     if (view.length === 0) {
       queueBody.innerHTML = '<tr class="empty-row"><td colspan="6">אין תלמידים ברשימה</td></tr>';
+      try{ if(yardCounter){ yardCounter.classList.add('hidden'); yardCounter.innerHTML=''; } }catch(e){}
       return;
     }
 
     const rows = [];
+
+    // Yard counter: students with running timer ("על המגרש")
+    try{
+      if(yardCounter){
+        const running = view.filter(function(x){
+          try{ return x && x.timer && x.timer.started && x.timer.running && (x.timer.remainingSec||0) > 0; }catch(e){ return false; }
+        });
+        if(!running.length){
+          yardCounter.classList.add('hidden');
+          yardCounter.innerHTML='';
+        }else{
+          yardCounter.classList.remove('hidden');
+          const nums = running.map(function(_x, i){ return '<span class="n">'+(i+1)+'</span>'; }).join('');
+          yardCounter.innerHTML = '<span class="label">על המגרש</span>' + nums;
+        }
+      }
+    }catch(e){}
     for (const it of view) {
       const s = getStudent(it.tz) || {};
       const name = studentFullName(s);
@@ -13000,8 +13277,7 @@ function renderSecretaryStudentResults(q){
         '<div class="sec-stu-modal" role="dialog" aria-modal="true">' +
           '<div class="sec-stu-hdr">' +
             '<div class="sec-stu-title">' +
-              '<div class="sec-stu-name">'+esc(name)+'</div>' +
-              '<div class="sec-stu-meta">ת״ז '+esc(tz) + (phone?(' · '+esc(phone)):'') + '</div>' +
+              '<div class="sec-stu-top-title">פרופיל תלמיד</div>' +
             '</div>' +
             '<button type="button" class="sec-stu-x tap" data-tap="" aria-label="סגור" onclick="closeSecStudentProfileModal()">✕</button>' +
           '</div>' +
@@ -13834,7 +14110,279 @@ var title = $("mgrStudentModalTitle");
       '</tr>';
     }).join("");
   }
-  try{ window.mgrRenderRecentPayments = mgrRenderRecentPayments; }catch(e){}
+  try{ window.mgrRenderRecentPayments = mgrRenderRecentPayments; }catch(e){}  // ===== Payments Dashboard (Manager) v1 =====
+  var __mgrPayDashInited = false;
+
+  function mgrPayParseAmount(x){
+    try{
+      if(x==null) return 0;
+      var s = String(x).replace(/[₪,\s]/g,'').trim();
+      if(!s) return 0;
+      var n = parseFloat(s);
+      return isFinite(n) ? n : 0;
+    }catch(e){ return 0; }
+  }
+
+  function mgrPayNormMethod(p){
+    var m = normStr(p.method || p.payMethod || p.paymentMethod || p.pm || p.pay_type || "");
+    if(m === "cash" || m === "מזומן") return "cash";
+    if(m === "credit" || m === "card" || m === "אשראי") return "credit";
+    return m ? "unknown" : "unknown";
+  }
+
+  function mgrPayNormDomain(p){
+    var d = normStr(p.domain || p.sourceType || p.place || p.origin || "");
+    if(d === "shop" || d === "store" || d === "חנות") return "shop";
+    if(d === "school" || d === "lesson" || d === "בית ספר") return "school";
+    // fallback: existing storage uses cashType as cashbox (general/shop)
+    var cash = normStr(p.cash || p.cashType || p.type || "");
+    if(cash === "shop") return "shop";
+    return "school";
+  }
+
+  function normalizePaymentDash(p){
+    var base = normalizePayment(p);
+    base.method = mgrPayNormMethod(p);
+    base.domain = mgrPayNormDomain(p);
+    base.note = normStr(p.note || p.name || p.studentName || base.note || "");
+    base.amountNum = mgrPayParseAmount(base.amount);
+    return base;
+  }
+
+  function mgrPayLocalDateISO(d){
+    // yyyy-mm-dd in local time
+    var y = d.getFullYear();
+    var m = String(d.getMonth()+1).padStart(2,'0');
+    var dd = String(d.getDate()).padStart(2,'0');
+    return y + "-" + m + "-" + dd;
+  }
+
+  function mgrPayStartOfDayTs(d){
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate(), 0,0,0,0).getTime();
+  }
+
+  function mgrPayRange(period, anchorDate){
+    var d = anchorDate ? new Date(anchorDate.getTime()) : new Date();
+    var start, end, label;
+
+    if(period === "weekly"){
+      // Week starts Sunday (Israel common)
+      var dow = d.getDay(); // 0=Sun
+      var sd = new Date(d.getFullYear(), d.getMonth(), d.getDate() - dow, 0,0,0,0);
+      start = sd.getTime();
+      end = start + 7*24*60*60*1000;
+      var ed = new Date(end - 1);
+      label = "שבוע: " + mgrPayLocalDateISO(sd) + " עד " + mgrPayLocalDateISO(ed);
+    }else if(period === "monthly"){
+      var md = new Date(d.getFullYear(), d.getMonth(), 1, 0,0,0,0);
+      start = md.getTime();
+      end = new Date(d.getFullYear(), d.getMonth()+1, 1, 0,0,0,0).getTime();
+      label = "חודש: " + String(d.getMonth()+1).padStart(2,'0') + "/" + d.getFullYear();
+    }else if(period === "yearly"){
+      var yd = new Date(d.getFullYear(), 0, 1, 0,0,0,0);
+      start = yd.getTime();
+      end = new Date(d.getFullYear()+1, 0, 1, 0,0,0,0).getTime();
+      label = "שנה: " + d.getFullYear();
+    }else{
+      // daily
+      start = mgrPayStartOfDayTs(d);
+      end = start + 24*60*60*1000;
+      label = "יום: " + mgrPayLocalDateISO(d);
+    }
+
+    return {start:start, end:end, label:label};
+  }
+
+  function mgrPayShift(period, anchorDate, dir){
+    var d = anchorDate ? new Date(anchorDate.getTime()) : new Date();
+    dir = (dir===-1 ? -1 : 1);
+    if(period === "weekly"){
+      d = new Date(d.getTime() + dir*7*24*60*60*1000);
+    }else if(period === "monthly"){
+      d = new Date(d.getFullYear(), d.getMonth()+dir, d.getDate(), 12,0,0,0);
+    }else if(period === "yearly"){
+      d = new Date(d.getFullYear()+dir, d.getMonth(), d.getDate(), 12,0,0,0);
+    }else{
+      d = new Date(d.getTime() + dir*24*60*60*1000);
+    }
+    return d;
+  }
+
+  function mgrPayFmtILS(n){
+    try{
+      n = isFinite(n) ? n : 0;
+      var s = (Math.round(n*100)/100).toFixed(2);
+      // trim .00
+      if(s.endsWith(".00")) s = s.slice(0,-3);
+      return "₪" + s;
+    }catch(e){ return "₪0"; }
+  }
+
+  function mgrPayPct(part, total){
+    try{
+      if(!total) return "0%";
+      var p = Math.round((part/total)*100);
+      if(p<0) p=0;
+      if(p>100) p=100;
+      return p + "%";
+    }catch(e){ return "0%"; }
+  }
+
+  function mgrPayGetAll(){
+    var arr = readPays().map(normalizePaymentDash);
+    arr.sort(function(a,b){ return b.ts - a.ts; });
+    return arr;
+  }
+
+  function mgrPayApplyFilters(rows){
+    var domSel = $("mgrPayFilterDomain");
+    var metSel = $("mgrPayFilterMethod");
+    var qInp = $("mgrPaySearch");
+    var dom = domSel ? (domSel.value||"all") : "all";
+    var met = metSel ? (metSel.value||"all") : "all";
+    var q = qInp ? normStr(qInp.value||"") : "";
+    return rows.filter(function(r){
+      if(dom !== "all" && r.domain !== dom) return false;
+      if(met !== "all" && r.method !== met) return false;
+      if(q){
+        var hay = (r.receipt + " " + r.note).toLowerCase();
+        if(hay.indexOf(q.toLowerCase()) === -1) return false;
+      }
+      return true;
+    });
+  }
+
+  function mgrPayRender(){
+    var periodEl = $("mgrPayPeriod");
+    var dateEl = $("mgrPayAnchorDate");
+    if(!periodEl || !dateEl) return;
+
+    var period = periodEl.value || "daily";
+    var anchor = null;
+    try{
+      var v = dateEl.value;
+      anchor = v ? new Date(v + "T12:00:00") : new Date();
+    }catch(e){ anchor = new Date(); }
+
+    var range = mgrPayRange(period, anchor);
+    var labelEl = $("mgrPayRangeLabel");
+    if(labelEl) labelEl.textContent = range.label;
+
+    var all = mgrPayGetAll();
+    var inRange = all.filter(function(r){ return r.ts >= range.start && r.ts < range.end; });
+
+    // Totals
+    var total = 0, cash = 0, credit = 0, school = 0, shop = 0;
+    var schoolCash=0, schoolCredit=0, shopCash=0, shopCredit=0;
+
+    inRange.forEach(function(r){
+      var a = r.amountNum || 0;
+      total += a;
+      if(r.domain === "shop") shop += a; else school += a;
+
+      if(r.method === "cash"){
+        cash += a;
+        if(r.domain === "shop") shopCash += a; else schoolCash += a;
+      }else if(r.method === "credit"){
+        credit += a;
+        if(r.domain === "shop") shopCredit += a; else schoolCredit += a;
+      }
+    });
+
+    var kTotal = $("mgrKpiTotal"); if(kTotal) kTotal.textContent = mgrPayFmtILS(total);
+    var kCount = $("mgrKpiCount"); if(kCount) kCount.textContent = inRange.length + " תשלומים";
+    var kCash = $("mgrKpiCash"); if(kCash) kCash.textContent = mgrPayFmtILS(cash);
+    var kCredit = $("mgrKpiCredit"); if(kCredit) kCredit.textContent = mgrPayFmtILS(credit);
+    var kCashPct = $("mgrKpiCashPct"); if(kCashPct) kCashPct.textContent = mgrPayPct(cash,total);
+    var kCreditPct = $("mgrKpiCreditPct"); if(kCreditPct) kCreditPct.textContent = mgrPayPct(credit,total);
+    var kSchool = $("mgrKpiSchool"); if(kSchool) kSchool.textContent = mgrPayFmtILS(school);
+    var kShop = $("mgrKpiShop"); if(kShop) kShop.textContent = mgrPayFmtILS(shop);
+
+    var s1=$("mgrSplitSchoolTotal"); if(s1) s1.textContent = mgrPayFmtILS(school);
+    var s2=$("mgrSplitSchoolCash"); if(s2) s2.textContent = mgrPayFmtILS(schoolCash);
+    var s3=$("mgrSplitSchoolCredit"); if(s3) s3.textContent = mgrPayFmtILS(schoolCredit);
+    var t1=$("mgrSplitShopTotal"); if(t1) t1.textContent = mgrPayFmtILS(shop);
+    var t2=$("mgrSplitShopCash"); if(t2) t2.textContent = mgrPayFmtILS(shopCash);
+    var t3=$("mgrSplitShopCredit"); if(t3) t3.textContent = mgrPayFmtILS(shopCredit);
+
+    // Table
+    var tb = $("mgrPayTxTbody");
+    if(!tb) return;
+
+    var filtered = mgrPayApplyFilters(inRange);
+    if(!filtered.length){
+      tb.innerHTML = '<tr><td colspan="6" style="text-align:center;opacity:.85;">אין תשלומים</td></tr>';
+      return;
+    }
+
+    tb.innerHTML = filtered.slice(0, 250).map(function(r){
+      var domLabel = (r.domain === "shop") ? "חנות" : "בית ספר";
+      var metLabel = (r.method === "cash") ? "מזומן" : (r.method === "credit" ? "אשראי" : "לא ידוע");
+      var dt = esc(r.date + " " + r.time);
+      return '<tr>' +
+        '<td>'+dt+'</td>' +
+        '<td>'+esc(r.receipt)+'</td>' +
+        '<td>'+domLabel+'</td>' +
+        '<td>'+metLabel+'</td>' +
+        '<td style="font-weight:900;">'+esc(mgrPayFmtILS(r.amountNum||0))+'</td>' +
+        '<td>'+esc(r.note||"")+'</td>' +
+      '</tr>';
+    }).join("");
+  }
+
+  function mgrPayInitOnce(){
+    if(__mgrPayDashInited) return;
+    __mgrPayDashInited = true;
+
+    var periodEl = $("mgrPayPeriod");
+    var dateEl = $("mgrPayAnchorDate");
+    var prevBtn = $("mgrPayPrev");
+    var nextBtn = $("mgrPayNext");
+    var todayBtn = $("mgrPayToday");
+    var fDom = $("mgrPayFilterDomain");
+    var fMet = $("mgrPayFilterMethod");
+    var qInp = $("mgrPaySearch");
+
+    if(dateEl && !dateEl.value){
+      dateEl.value = mgrPayLocalDateISO(new Date());
+    }
+
+    function rerender(){ try{ mgrPayRender(); }catch(e){} }
+
+    if(periodEl) periodEl.addEventListener("change", rerender);
+    if(dateEl) dateEl.addEventListener("change", rerender);
+    if(prevBtn) prevBtn.addEventListener("click", function(){
+      var per = periodEl ? (periodEl.value||"daily") : "daily";
+      var cur = dateEl && dateEl.value ? new Date(dateEl.value + "T12:00:00") : new Date();
+      var nd = mgrPayShift(per, cur, -1);
+      if(dateEl) dateEl.value = mgrPayLocalDateISO(nd);
+      rerender();
+    });
+    if(nextBtn) nextBtn.addEventListener("click", function(){
+      var per = periodEl ? (periodEl.value||"daily") : "daily";
+      var cur = dateEl && dateEl.value ? new Date(dateEl.value + "T12:00:00") : new Date();
+      var nd = mgrPayShift(per, cur, +1);
+      if(dateEl) dateEl.value = mgrPayLocalDateISO(nd);
+      rerender();
+    });
+    if(todayBtn) todayBtn.addEventListener("click", function(){
+      if(dateEl) dateEl.value = mgrPayLocalDateISO(new Date());
+      rerender();
+    });
+
+    if(fDom) fDom.addEventListener("change", rerender);
+    if(fMet) fMet.addEventListener("change", rerender);
+    if(qInp) qInp.addEventListener("input", function(){ rerender(); });
+
+    // Render on first init
+    rerender();
+  }
+
+  function mgrRenderPaymentsDashboard(){
+    try{ mgrPayInitOnce(); }catch(e){}
+    try{ mgrPayRender(); }catch(e2){}
+  }
+  try{ window.mgrRenderPaymentsDashboard = mgrRenderPaymentsDashboard; }catch(e){}
 
   var __cashType = "general";
   var __cashYmd = "";
@@ -17928,6 +18476,121 @@ function getCredit(tz){
 
   
 
+
+// --- Book Test helpers (v15) ---
+function _btReadAny(o, keys){
+  try{
+    if(!o || typeof o!=='object') return null;
+    for(var i=0;i<keys.length;i++){
+      var k=keys[i];
+      if(Object.prototype.hasOwnProperty.call(o,k) && o[k]!=null && String(o[k]).trim()!=='') return o[k];
+    }
+  }catch(e){}
+  return null;
+}
+function _btParseDateTime(dateRaw, timeRaw){
+  try{
+    var dRaw = String(dateRaw||'').trim();
+    if(!dRaw) return null;
+    var y=0, mo=0, da=0;
+    var m = dRaw.match(/^(\d{4})[-\/.](\d{1,2})[-\/.](\d{1,2})$/);
+    if(m){ y=+m[1]; mo=+m[2]; da=+m[3]; }
+    else{
+      m = dRaw.match(/^(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4})$/);
+      if(m){ da=+m[1]; mo=+m[2]; y=+m[3]; }
+      else return null;
+    }
+    if(!y||!mo||!da) return null;
+    var hh=9, mm=0;
+    var t = String(timeRaw||'').trim();
+    var mt = t.match(/(\d{1,2})\s*[:.]\s*(\d{2})/);
+    if(mt){ hh=Math.min(23, +mt[1]||0); mm=Math.min(59, +mt[2]||0); }
+    var dt = new Date(y, mo-1, da, hh, mm, 0, 0);
+    if(isNaN(dt.getTime())) return null;
+    return dt;
+  }catch(e){ return null; }
+}
+function _btFmtDate(dt){
+  try{
+    var dd = String(dt.getDate()).padStart(2,'0');
+    var mm = String(dt.getMonth()+1).padStart(2,'0');
+    var yy = dt.getFullYear();
+    return dd + '/' + mm + '/' + yy;
+  }catch(e){ return ''; }
+}
+function _btFmtTime(dt){
+  try{
+    var hh = String(dt.getHours()).padStart(2,'0');
+    var mm = String(dt.getMinutes()).padStart(2,'0');
+    return hh + ':' + mm;
+  }catch(e){ return ''; }
+}
+function _btGetStudentPack(tz){
+  var tzN = _normTzKey(tz);
+  if(!tzN) return {tz: tzN, prof:null, reg:null, db:null};
+  var prof=null, reg=null, db=null;
+
+  try{ prof = (typeof getStudentProfile==='function') ? getStudentProfile(tzN) : null; }catch(e){ prof=null; }
+
+  try{
+    var regRaw = (window.DBStorage && DBStorage.getItem) ? DBStorage.getItem('students_registry_v1') : localStorage.getItem('students_registry_v1');
+    if(regRaw){
+      var regObj = JSON.parse(regRaw);
+      if(Array.isArray(regObj)){
+        for(var i=0;i<regObj.length;i++){
+          var it = regObj[i]||{};
+          var itTz = String(it.tz||it.id||it.userId||it.username||it.user||it.uid||it.teudatZehut||it['תז']||it['ת\"ז']||'').trim();
+          itTz = _normTzKey(itTz);
+          if(itTz && itTz===tzN){ reg=it; break; }
+        }
+      }else if(regObj && typeof regObj==='object'){
+        var cand = regObj[tzN];
+        if(cand && typeof cand==='object') reg=cand;
+      }
+    }
+  }catch(e){ reg=null; }
+
+  try{
+    if(typeof getStudentByTz==='function') db = getStudentByTz(tzN);
+  }catch(e){ db=null; }
+  // fallback: search students db array if helper exists
+  if(!db){
+    try{
+      var arr = (typeof _secGetAllStudents==='function') ? (_secGetAllStudents()||[]) : [];
+      if(Array.isArray(arr)){
+        for(var j=0;j<arr.length;j++){
+          var st = arr[j]||{};
+          var stTz = '';
+          try{ stTz = (typeof _secGetStudentTz==='function') ? _secGetStudentTz(st) : ''; }catch(e){ stTz=''; }
+          if(!stTz) stTz = String(st.tz||st.id||st.username||st.userId||st.uid||st['תז']||st['ת\"ז']||'').trim();
+          stTz = _normTzKey(stTz);
+          if(stTz && stTz===tzN){ db = st; break; }
+        }
+      }
+    }catch(e){}
+  }
+
+  return {tz: tzN, prof: prof, reg: reg, db: db};
+}
+function _btGetSystemTestInfo(tz){
+  try{
+    var pack = _btGetStudentPack(tz);
+    var p = pack.prof||{}, r = pack.reg||{}, d = pack.db||{};
+    var dateRaw = _btReadAny(p,['testDate','nextTestDate','test','test_date','תאריך טסט','תאריך_טסט'])
+               || _btReadAny(r,['testDate','nextTestDate','test','test_date','תאריך טסט','תאריך_טסט'])
+               || _btReadAny(d,['testDate','nextTestDate','test','test_date','תאריך טסט','תאריך_טסט']);
+    var timeRaw = _btReadAny(p,['testTime','testHour','שעת טסט','שעה_טסט','test_time'])
+               || _btReadAny(r,['testTime','testHour','שעת טסט','שעה_טסט','test_time'])
+               || _btReadAny(d,['testTime','testHour','שעת טסט','שעה_טסט','test_time']);
+    if(!dateRaw) return {has:false, dateRaw:null, timeRaw:null, dt:null, display:''};
+    var dt = _btParseDateTime(dateRaw, timeRaw);
+    var disp = '';
+    if(dt) disp = _btFmtDate(dt) + (timeRaw ? (' ' + _btFmtTime(dt)) : '');
+    else disp = String(dateRaw).trim() + (timeRaw ? (' ' + String(timeRaw).trim()) : '');
+    return {has:true, dateRaw:dateRaw, timeRaw:timeRaw, dt:dt, display:disp};
+  }catch(e){ return {has:false, dateRaw:null, timeRaw:null, dt:null, display:''}; }
+}
+
 // --- Book Test page renderer (v8) ---
 // Shows current credit + order status (single source of truth: admin_test_orders_v1)
 window.renderBookTestPage = function(){
@@ -17942,6 +18605,19 @@ window.renderBookTestPage = function(){
       if(stEl) stEl.textContent = "—";
       return;
     }
+
+    var sysEl = $("btSystemTestDt");
+    var orderBtn = $("btOrderBtn");
+    var sys = (typeof _btGetSystemTestInfo==="function") ? _btGetSystemTestInfo(tz) : {has:false, display:""};
+    try{ if(sysEl) sysEl.textContent = (sys && sys.has) ? sys.display : "—"; }catch(e){}
+    if(sys && sys.has){
+      try{ if(stEl) stEl.textContent = "קיים כבר תאריך (" + sys.display + ")"; }catch(e){}
+      try{ if(orderBtn) orderBtn.setAttribute("disabled","disabled"); }catch(e){}
+      return;
+    }else{
+      try{ if(orderBtn) orderBtn.removeAttribute("disabled"); }catch(e){}
+    }
+
     var credit = 0;
     try{ credit = getCredit(tz); }catch(e){ credit = 0; }
     try{
@@ -17966,6 +18642,7 @@ window.renderBookTestPage = function(){
       var t = "הוזמן";
       if(when) t += " (" + fmtDt(when) + ")";
       if(stEl) stEl.textContent = t;
+      try{ var ob=$("btOrderBtn"); if(ob) ob.setAttribute("disabled","disabled"); }catch(e){}
       return;
     }
 
@@ -17977,6 +18654,7 @@ window.renderBookTestPage = function(){
       var t2 = "הוזמן";
       if(when2) t2 += " (" + fmtDt(when2) + ")";
       if(stEl) stEl.textContent = t2;
+      try{ var ob2=$("btOrderBtn"); if(ob2) ob2.setAttribute("disabled","disabled"); }catch(e){}
       return;
     }
 
@@ -18026,10 +18704,13 @@ function bindBookTestOrder(){
         }
       }catch(e){}
 
-      function showAlready(){
+      function showAlready(msg){
         try{
           var t = $("btAlreadyText");
-          if(t) t.textContent = "יש כבר טסט מוזמן במערכת. תקבל תאריך בימים הקרובים.";
+          if(t){
+            var base = (msg && String(msg).trim()) ? String(msg).trim() : "לא ניתן להזמין טסט: קיים כבר תאריך במערכת.";
+            t.textContent = base;
+          }
         }catch(e){}
         try{ openOverlay(alreadyOv); }catch(e){}
       }
@@ -18043,7 +18724,20 @@ function bindBookTestOrder(){
       }catch(e){}
 
 
-      // Prevent duplicate orders: check admin log + legacy per-student key
+      
+      // Block order if there is already a scheduled test date/time in the system
+      try{
+        var sys = (typeof _btGetSystemTestInfo==="function") ? _btGetSystemTestInfo(tz) : null;
+        if(sys && sys.has){
+          var msg = "לא ניתן להזמין טסט: קיים כבר תאריך";
+          if(sys.display) msg += " (" + sys.display + ")";
+          msg += ". אם יש בעיה עם התאריך, נא פנה למשרד.";
+          showAlready(msg);
+          try{ window.renderBookTestPage(); }catch(e){}
+          return;
+        }
+      }catch(e){}
+// Prevent duplicate orders: check admin log + legacy per-student key
       var found = null;
       try{ found = _findTestOrderInLog(tz); }catch(e){ found = null; }
       var ord = null;
@@ -18104,6 +18798,10 @@ function bindBookTestOrder(){
         try{ nm = st ? (st.firstName||st.name||st.fullName||"") : ""; }catch(e){}
         addTestOrderEntry(tz, nm, price, txId);
       }catch(e){}
+
+      // refresh secretary test orders list (if open)
+      try{ if(typeof window.renderTestOrdersFiles==="function") window.renderTestOrdersFiles(); }catch(e){}
+
 
       // 3) Legacy state (optional)
       try{ setOrder(tz, { orderedAt: Date.now(), price: price, status: "ordered", txId: txId }); }catch(e){}
@@ -18322,6 +19020,7 @@ if(document.readyState === "loading"){
     lang: "app_settings_lang",
     theme: "app_settings_theme",
     textSize: "app_settings_text_size",
+    textScalePercent: "app_settings_text_scale_percent",
     highContrast: "app_settings_high_contrast",
     reduceMotion: "app_settings_reduce_motion",
     bigButtons: "app_settings_big_buttons"
@@ -18375,9 +19074,18 @@ if(document.readyState === "loading"){
     document.querySelectorAll(".seg-btn[data-theme]").forEach(function(b){
       b.classList.toggle("active", b.getAttribute("data-theme") === theme);
     });
-    document.querySelectorAll(".seg-btn[data-text-size]").forEach(function(b){
-      b.classList.toggle("active", b.getAttribute("data-text-size") === textSize);
-    });
+
+    // text size slider
+    try{
+      var r = document.getElementById("textScaleRange");
+      var v = document.getElementById("textScaleValue");
+      if(r){
+        var p = getTextScalePercent();
+        r.value = String(p);
+        if(v) v.textContent = String(p) + "%";
+      }
+    }catch(e){}
+
 
     // toggles
     function setToggle(name, on){
@@ -18408,10 +19116,24 @@ if(document.readyState === "loading"){
     try{ if(window.__setSecretaryBgLock) window.__setSecretaryBgLock(false); }catch(e){}
   }
 
-  function applyAccessibility(){
+  function getTextScalePercent(){
+    // Preferred: stored percent (80-140). Backward compatible with old sm/md/lg.
+    var p = read(KEYS.textScalePercent, "");
+    var n = parseInt(p, 10);
+    if(!isNaN(n) && n >= 80 && n <= 140) return n;
+
     var size = read(KEYS.textSize, "md");
+    if(size === "sm") return 90;
+    if(size === "lg") return 115;
+    return 100;
+  }
+
+  function applyAccessibility(){
+    var p = getTextScalePercent();
+    // Keep legacy classes for compatibility with existing CSS selectors, but drive size via CSS var.
     document.body.classList.remove("text-sm","text-md","text-lg");
-    document.body.classList.add(size === "sm" ? "text-sm" : (size === "lg" ? "text-lg" : "text-md"));
+    document.body.classList.add("text-md");
+    document.body.style.setProperty("--text-scale", String(p/100));
 
     document.body.classList.toggle("hc", read(KEYS.highContrast,"0")==="1");
     document.body.classList.toggle("rm", read(KEYS.reduceMotion,"0")==="1");
@@ -18427,6 +19149,27 @@ if(document.readyState === "loading"){
   }
 
   function initSettingsUI(){
+    // text size slider
+    try{
+      var r = document.getElementById("textScaleRange");
+      var v = document.getElementById("textScaleValue");
+      if(r){
+        r.addEventListener("input", function(){
+          var p = parseInt(r.value, 10);
+          if(isNaN(p)) p = 100;
+          if(p < 80) p = 80;
+          if(p > 140) p = 140;
+          if(v) v.textContent = String(p) + "%";
+          write(KEYS.textScalePercent, String(p));
+          // keep legacy key in sync (best effort)
+          if(p <= 94) write(KEYS.textSize, "sm");
+          else if(p >= 108) write(KEYS.textSize, "lg");
+          else write(KEYS.textSize, "md");
+          applyAccessibility();
+        });
+      }
+    }catch(e){}
+
     // language
     document.addEventListener("click", function(e){
       var btn = e.target && (e.target.closest ? e.target.closest(".seg-btn") : null);
@@ -18437,11 +19180,6 @@ if(document.readyState === "loading"){
       if(btn && btn.hasAttribute("data-theme")){
         write(KEYS.theme, btn.getAttribute("data-theme"));
         applyTheme(); setActiveButtons();
-        return;
-      }
-      if(btn && btn.hasAttribute("data-text-size")){
-        write(KEYS.textSize, btn.getAttribute("data-text-size"));
-        applyAccessibility(); setActiveButtons();
         return;
       }
       var tgl = e.target && (e.target.closest ? e.target.closest(".toggle") : null);
@@ -20057,35 +20795,15 @@ window.enableSecretaryMode = function(persist){
       console.warn('openSecretaryTestOrders failed', err);
     }
   };
-
   // Secretary top-right back button (profile/home)
-    // Secretary top-right app home button (reuse same visual icon style)
+  // NOTE: Duplicate secretary-only Home button (secTopHomeBtn) was removed. Use the main #homeBtn everywhere.
   window.__secEnsureTopBackBtn = function(){
     try{
-      var btn = document.getElementById('secTopHomeBtn');
-      if(!btn){
-        btn = document.createElement('button');
-        btn.id = 'secTopHomeBtn';
-        btn.type = 'button';
-        btn.setAttribute('aria-label','חזרה');
-        btn.className = 'top-home-btn tap';
-        btn.setAttribute('data-tap','');
-        btn.style.cssText = 'position:fixed;top:10px;right:10px;left:auto;z-index:2600;display:none;';
-        btn.innerHTML = '<img alt="חזרה" src="home_icon.png">';
-        btn.onclick = function(){
-          try{ var dm = document.getElementById('secFutureDayModal'); if(dm){ dm.remove(); return; } }catch(e){}
-          try{ var sdet = document.getElementById('secShopDetailModal'); if(sdet){ sdet.remove(); return; } }catch(e){}
-          try{ if(typeof closeOverlay === 'function') closeOverlay('secPaymentOverlay'); }catch(e){}
-          try{ if(typeof closeOverlay === 'function') closeOverlay('secShopOverlay'); }catch(e){}
-          try{ if(typeof closeOverlay === 'function') closeOverlay('secTestOrdersOverlay'); }catch(e){}
-        };
-        document.body.appendChild(btn);
-      }
-      var show = false;
-      try{ show = _secIsOn(); }catch(e){}
-      if(btn) btn.style.display = show ? 'inline-flex' : 'none';
+      var dup = document.getElementById('secTopHomeBtn');
+      if(dup) dup.remove();
     }catch(e){}
   };
+
   // Secretary Mail UI
   function _secIsOn(){
     try{ return document.body.classList.contains('secretary-mode') || (window.APP_STATE && window.APP_STATE.get && window.APP_STATE.get('userRole') === 'secretary'); }catch(e){ return document.body.classList.contains('secretary-mode'); }
@@ -21392,7 +22110,7 @@ if(safeGet('mgrMode') === '1' && (__u === 'מנהל' || __low === 'manager')){
         try{ var inp = document.getElementById('mgrStudentSearch'); inp && inp.focus && inp.focus(); }catch(e2){}
       }else if(which === 'payments'){
         window.mgrShowView('mgrViewPayments','מעקב תשלומים');
-        window.mgrRenderRecentPayments && window.mgrRenderRecentPayments();
+        window.mgrRenderPaymentsDashboard && window.mgrRenderPaymentsDashboard();
       }else if(which === 'orders'){
         window.mgrShowView('mgrViewOrders','ניהול הזמנות');
         window.mgrRenderOrders && window.mgrRenderOrders();
