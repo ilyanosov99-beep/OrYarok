@@ -7596,3 +7596,8 @@ body.theme-day #studentProfilePage .page-inner{
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
+
+
+/* Student Profile title color: day=black, night=white */
+body.theme-day #studentProfilePage .sp-head h1{ color:#111 !important; text-shadow:none !important; }
+body.theme-night #studentProfilePage .sp-head h1{ color:#fff !important; }
