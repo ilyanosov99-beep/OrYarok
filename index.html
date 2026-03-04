@@ -565,7 +565,7 @@
 <button class="action-btn tap gray" data-tap="" onclick="copyShareText()" type="button">העתק</button>
 </div>
 </div>
-<button class="page-back" onclick="backToMainMenu()" type="button">חזרה</button>
+	<!-- removed: back button in personal messages (student menu) -->
 </div>
 </div>
 <div class="page" id="licenseInfoPage">
@@ -1387,13 +1387,19 @@
 </div>
 <div class="sp-card-b">
 <div class="sp-kpis">
-<div class="sp-kpi sp-kpiClickable" id="spKpiDoneCard">
+<div class="sp-kpi sp-kpiBtn sp-kpiClickable" id="spKpiDoneCard">
+<div class="sp-kpi-main">
 <div class="l">שיעורים שבוצעו</div>
 <div class="v" id="spKpiDone">0</div>
 </div>
-<div class="sp-kpi sp-kpiClickable" id="spKpiOutCard">
+<div class="sp-kpi-open"><div>פתח</div><div>היסטורייה</div></div>
+</div>
+<div class="sp-kpi sp-kpiBtn sp-kpiClickable" id="spKpiOutCard">
+<div class="sp-kpi-main">
 <div class="l">חוץ שביצע</div>
 <div class="v" id="spKpiOut">0</div>
+</div>
+<div class="sp-kpi-open"><div>פתח</div><div>היסטורייה</div></div>
 </div>
 </div>
 </div>
@@ -1405,7 +1411,7 @@
 </div>
 <div class="sp-card-b">
 <div class="sp-kpis">
-<div class="sp-kpi"><div class="l">שולם</div><div class="v" id="spPayPaid">—</div></div> <div class="sp-kpi"><div class="l">תשלום אחרון</div><div class="v" id="spPayLast">—</div></div>
+<div class="sp-kpi sp-kpiBtn sp-kpiClickable" id="spPayPaidCard"><div class="sp-kpi-main"><div class="l">שולם</div><div class="v" id="spPayPaid">—</div></div><div class="sp-kpi-open"><div>פתח</div><div>היסטורייה</div></div></div> <div class="sp-kpi"><div class="l">תשלום אחרון</div><div class="v" id="spPayLast">—</div></div>
 </div>
 <div class="sp-muted" id="spPayNote">—</div>
 </div>
@@ -1427,17 +1433,17 @@
 </div>
 </div>
 </div>
-<button class="page-back" onclick="backToMainMenu()" type="button">חזרה</button>
+<!-- removed: back button in personal messages (student menu) -->
 </div>
 </div>
 </section>
-<div aria-hidden="true" class="modalBackdrop" id="pmViewModal">
-<div aria-label="הודעה" aria-modal="true" class="modalBox" role="dialog">
-<div class="modalTop">
-<button class="modalClose" id="pmViewClose" type="button">סגירה</button>
-<div class="modalTitle" id="pmViewTitle">הודעה</div>
+<div aria-hidden="true" class="modalBackdrop pmViewBackdrop" id="pmViewModal">
+<div aria-label="הודעה" aria-modal="true" class="modalBox pmViewBox" role="dialog">
+<div class="modalTop pmViewTop">
+<div class="modalTitle pmViewTitle" id="pmViewTitle">הודעה</div>
+<button class="modalClose pmViewClose" id="pmViewClose" type="button" aria-label="סגירה">✕</button>
 </div>
-<div class="modalBody">
+<div class="modalBody pmViewBodyWrap">
 <div class="pmViewMeta" id="pmViewMeta"></div>
 <div class="pmViewBody" id="pmViewBody"></div>
 </div>

@@ -832,7 +832,9 @@ function openPage(pageId, pushToStack){
 
   page.classList.add('show');
   try{ ensureCloseSliderOnPage(page); }catch(e){}
-  document.body.classList.add('page-open');
+  
+  try{ if(page && page.id==="studentProfilePage") cleanupStudentProfileStrayFooterNumber(); }catch(e){}
+document.body.classList.add('page-open');
   syncShopOnState(pageId);
   try{ if(typeof syncAppStateFromDOM === 'function') syncAppStateFromDOM(); }catch(e){}
   
@@ -4231,7 +4233,11 @@ try{
   try{ _tt = pick(profile, ["testTime","testHour","test_time","שעת טסט","שעה_טסט","שעת_טסט"]); }catch(e){ _tt = profile.testTime || ""; }
   setText("spTestTime", _tt || "");
   setText("spLessonsDone", profile.lessonsDone);
-  setText("spTestsTaken", profile.testsTaken);
+  // normalize testsTaken: avoid showing "-" placeholder
+  var _testsTaken = (profile && (profile.testsTaken != null ? profile.testsTaken : pick(profile, ["tests","testsCount","tests_taken","כמות טסטים"])));
+  try{ if(typeof _testsTaken === "string") _testsTaken = _testsTaken.trim(); }catch(e){}
+  if(_testsTaken === "" || _testsTaken === null || _testsTaken === undefined || _testsTaken === "-" || _testsTaken === "—") _testsTaken = 0;
+  setText("spTestsTaken", _testsTaken);
 
   try{ if(typeof window.renderStudentStats === "function") window.renderStudentStats(profile, username); }catch(e){}
 };
@@ -4394,6 +4400,77 @@ window.renderStudentStats = function(profile, username){
   setText('spLessonsDone', (done != null) ? fmtHalfNum(done) : "—");
   setText('spKpiScheduled', scheduledCount);
 
+  // Student role: disable opening history from "פרטי תלמיד" rows (balance / lessons done).
+  try{
+    var __roleNow = (window.APP_STATE && typeof window.APP_STATE.get === 'function') ? window.APP_STATE.get('userRole') : (window.APP_STATE ? window.APP_STATE.userRole : null);
+    if(__roleNow === 'student'){
+      var __cells = [document.getElementById('spLessonsDone'), document.getElementById('spBalanceMoney')];
+      for(var __i=0; __i<__cells.length; __i++){
+        var __td = __cells[__i];
+        if(!__td) continue;
+
+        // Remove any direct listeners by cloning the cell.
+        try{
+          if(__td.parentNode){
+            var __clone = __td.cloneNode(true);
+            __td.parentNode.replaceChild(__clone, __td);
+            __td = __clone;
+            // update array reference if needed
+            __cells[__i] = __td;
+          }
+        }catch(_e){}
+
+        // Ensure it doesn't look clickable
+        try{ __td.style.cursor = 'default'; }catch(_e2){}
+
+        // Hard-block delegated listeners on the row (capture phase)
+        try{
+          var __tr = (__td.closest) ? __td.closest('tr') : null;
+          if(__tr && !__tr.__studentBlockHist){
+            __tr.__studentBlockHist = 1;
+            var __stop = function(e){
+              try{ if(e){ e.preventDefault(); e.stopPropagation(); e.stopImmediatePropagation && e.stopImmediatePropagation(); } }catch(_e3){}
+              return false;
+            };
+            __tr.addEventListener('click', __stop, true);
+            
+          }
+        }catch(_e4){}
+      }
+    }
+
+  // Student role: open transactions history ONLY from "שולם" in payments card.
+  try{
+    var __roleNow2 = (window.APP_STATE && typeof window.APP_STATE.get === 'function') ? window.APP_STATE.get('userRole') : (window.APP_STATE ? window.APP_STATE.userRole : null);
+    if(__roleNow2 === 'student'){
+      var __paidEl = document.getElementById('spPayPaid');
+      var __paidBox = null;
+      try{ __paidBox = (__paidEl && __paidEl.closest) ? __paidEl.closest('.sp-kpi') : null; }catch(_e5a){}
+      var __paidTarget = __paidBox || __paidEl;
+      if(__paidTarget && !__paidTarget.__txStudentBound){
+        __paidTarget.__txStudentBound = 1;
+        try{ __paidTarget.style.cursor = 'pointer'; }catch(_e5){}
+        try{ if(__paidEl) __paidEl.style.cursor = 'inherit'; }catch(_e5b){}
+        var __openTxStudent = function(e){
+          try{ if(e){ e.preventDefault(); e.stopPropagation(); } }catch(_){}
+          var __tz = "";
+          try{ __tz = String(tzKey || username || "").replace(/\D/g,''); }catch(_e6){ __tz = ""; }
+          if(!__tz) return;
+          try{
+            if(typeof window.openTransactionsHistoryByTz === 'function') window.openTransactionsHistoryByTz(__tz, 'היסטוריית עסקאות לפי ת״ז ' + __tz);
+            else if(typeof window.secOpenTransactionsHistoryFromModal === 'function'){
+              try{ window.__profileViewTz = __tz; }catch(_e7){}
+              window.secOpenTransactionsHistoryFromModal();
+            }
+          }catch(_e8){}
+        };
+        if(typeof bindReleaseTap === 'function') bindReleaseTap(__paidTarget, __openTxStudent);
+        else __paidTarget.addEventListener('click', __openTxStudent);
+      }
+    }
+  }catch(e){}
+  }catch(e){}
+
   // Test
   var testStatus = $('spTestStatus');
   if(testStatus){
@@ -4438,13 +4515,23 @@ window.renderStudentStats = function(profile, username){
     setText('spPayPaid', fmtMoney(pay.paid)); 
     setText('spPayLast', pay.lastPayment || pay.last || '—');
     setText('spPayPill', 'מעודכן');
-    if(pay.note) setText('spPayNote', pay.note);
-    else setText('spPayNote', '—');
+    var note = pay.note;
+    if(note===undefined || note===null) note='';
+    if(typeof note!=='string') note = String(note);
+    note = note.trim();
+    // hide placeholders (e.g. "-", "—", digits) so nothing leaks to bottom of the card/page
+    var __noteEl = document.getElementById("spPayNote");
+    if(!note || /^\d+$/.test(note) || note === "-" || note === "—"){
+      if(__noteEl){ __noteEl.textContent = ""; __noteEl.style.display = "none"; }
+    }else{
+      if(__noteEl){ __noteEl.style.display = ""; __noteEl.textContent = note; }
+    }
   }else{
     setText('spPayPaid', '—');
     setText('spPayDue',  '—');
     setText('spPayLast', '—');
     setText('spPayPill', '—');
+    try{ var __noteEl2 = document.getElementById("spPayNote"); if(__noteEl2) __noteEl2.style.display = ""; }catch(e){}
     setText('spPayNote', 'אין נתוני תשלום שמורים');
   }
 };
@@ -5060,11 +5147,18 @@ function payClearPackSelection(){
       var a = $("payAmount");
       var n = $("payNote");
       var r = $("receiptInput");
-      // v8: reset receipt mode and input
-      try{ if(window.PAY){ PAY.receiptMode = "email"; } }catch(e){}
-      try{ if($("receiptEmailBtn")) $("receiptEmailBtn").classList.add("active"); }catch(e){}
-      try{ if($("receiptPhoneBtn")) $("receiptPhoneBtn").classList.remove("active"); }catch(e){}
-      try{ if(r){ r.value = ""; r.placeholder = "הכנס דואר אלקטרוני"; r.type = "email"; r.setAttribute("inputmode","email"); } }catch(e){}
+      // v8: keep receipt mode & typed value when selecting a package (do not wipe)
+      try{
+        if(!window.PAY) window.PAY = {};
+        // cache current input into the active mode slot
+        var _r = r;
+        if(_r){
+          var _m = (PAY && PAY.receiptMode) ? String(PAY.receiptMode) : "email";
+          var _v = String(_r.value||"");
+          if(_m === "phone") PAY.receiptPhoneValue = _v;
+          else PAY.receiptEmailValue = _v;
+        }
+      }catch(e){}
 
       if(a && PAY.selectedAmount != null) a.value = String(PAY.selectedAmount);
       if(n && PAY.selectedNote != null) n.value = String(PAY.selectedNote);
@@ -6370,6 +6464,145 @@ try{
   }
 }catch(e){}
 
+
+/* v6: Prefill receipt input from student profile (when available) */
+function payPrefillReceiptFromProfile(){
+  try{
+    // Candidate identifiers (student profile can be keyed by TZ or username)
+    var cands = [];
+    function pushCand(v){
+      v = String(v||"").trim();
+      if(!v) return;
+      if(cands.indexOf(v)===-1) cands.push(v);
+      // also push digits-only version (TZ) when possible
+      var d = v.replace(/\D/g,"").trim();
+      if(d && cands.indexOf(d)===-1) cands.push(d);
+    }
+
+    try{ if(typeof payGetUser === "function") pushCand(payGetUser()); }catch(e){}
+    try{ pushCand(window.__activeStudentTz); }catch(e){}
+    try{ pushCand(window.APP_STATE && window.APP_STATE.activeStudentTz); }catch(e){}
+    try{ pushCand(state && state.username); }catch(e){}
+    try{ pushCand(DBStorage.getItem("student_username")); }catch(e){}
+
+    if(!cands.length) return;
+
+    // Load profile from local storage / registry
+    function safeParse(raw){
+      try{ return JSON.parse(raw); }catch(e){ return null; }
+    }
+    function loadProfileByKey(key){
+      key = String(key||"").trim();
+      if(!key) return null;
+
+      // student_profile_<key>
+      try{
+        var raw = DBStorage.getItem("student_profile_" + key);
+        var obj = safeParse(raw);
+        if(obj && typeof obj === "object") return obj;
+      }catch(e){}
+
+      // students_registry_v1 (demo registry)
+      try{
+        var regRaw = DBStorage.getItem("students_registry_v1");
+        if(regRaw){
+          var reg = safeParse(regRaw) || null;
+          if(reg && typeof reg === "object" && reg[key] && typeof reg[key] === "object") return reg[key];
+        }
+      }catch(e){}
+
+      // appUsersProfile_<key> (if exists in some builds)
+      try{
+        var raw2 = DBStorage.getItem("appUserProfile_" + key);
+        var obj2 = safeParse(raw2);
+        if(obj2 && typeof obj2 === "object") return obj2;
+      }catch(e){}
+
+      return null;
+    }
+
+    var p = null;
+    for(var i=0;i<cands.length;i++){
+      p = loadProfileByKey(cands[i]);
+      if(p) break;
+    }
+    if(!p || typeof p !== "object") return;
+
+    // Extract email/phone with broad key coverage
+    function pick(obj, keys){
+      for(var i=0;i<keys.length;i++){
+        var k = keys[i];
+        if(obj[k] !== undefined && obj[k] !== null && String(obj[k]).trim() !== "") return String(obj[k]).trim();
+      }
+      return "";
+    }
+    var email = pick(p, ["email","mail","eMail","emailAddress","Email","דואר","דוא\"ל","דואל"]);
+    var phone = pick(p, ["phone","mobile","tel","phoneNumber","Phone","פלאפון","טלפון","נייד"]);
+    try{ if(phone && typeof normalizePhone === "function") phone = normalizePhone(phone); }catch(e){}
+    phone = String(phone||"").trim();
+    try{
+      if(!window.PAY) window.PAY = {};
+      // cache profile contacts for tab switching (do not override user-edited values)
+      if(email && (PAY.receiptEmailValue == null || String(PAY.receiptEmailValue).trim() === "")) PAY.receiptEmailValue = email;
+      if(phone && (PAY.receiptPhoneValue == null || String(PAY.receiptPhoneValue).trim() === "")) PAY.receiptPhoneValue = phone;
+    }catch(e){}
+
+
+    var r = null, emailBtn=null, phoneBtn=null;
+    try{ r = $("receiptInput"); emailBtn = $("receiptEmailBtn"); phoneBtn = $("receiptPhoneBtn"); }catch(e){}
+    if(!r) return;
+
+    var mode = "email";
+    try{ mode = (window.PAY && PAY.receiptMode) ? String(PAY.receiptMode) : "email"; }catch(e){ mode="email"; }
+
+    function applyMode(newMode){
+      try{
+        if(!window.PAY) window.PAY = {};
+        PAY.receiptMode = newMode;
+      }catch(e){}
+      try{
+        if(emailBtn) emailBtn.classList.toggle("active", newMode==="email");
+        if(phoneBtn) phoneBtn.classList.toggle("active", newMode==="phone");
+      }catch(e){}
+      try{
+        if(newMode==="phone"){
+          r.type = "tel";
+          r.setAttribute("inputmode","tel");
+          r.placeholder = "הכנס מספר פלאפון";
+        }else{
+          r.type = "email";
+          r.setAttribute("inputmode","email");
+          r.placeholder = "הכנס דואר אלקטרוני";
+        }
+      }catch(e){}
+    }
+
+    // Fill only if field is currently empty (do not override user typing)
+    var cur = "";
+    try{ cur = String(r.value||"").trim(); }catch(e){ cur=""; }
+    if(cur) return;
+
+    // Fill based on current mode; fallback to other if missing
+    if(mode === "phone"){
+      if(phone){
+        applyMode("phone");
+        r.value = phone;
+      }else if(email){
+        applyMode("email");
+        r.value = email;
+      }
+    }else{
+      if(email){
+        applyMode("email");
+        r.value = email;
+      }else if(phone){
+        applyMode("phone");
+        r.value = phone;
+      }
+    }
+  }catch(e){}
+}
+
 function openPaymentModal(presetAmount, presetNote, forceUser){
     try{
       if(!forceUser && typeof window !== 'undefined' && window.__PAY_BOOT_BLOCK) return;
@@ -6398,6 +6631,8 @@ function openPaymentModal(presetAmount, presetNote, forceUser){
       if(a) a.value = (presetAmount != null && String(presetAmount).trim() !== "") ? String(presetAmount) : "";
       if(n) n.value = (presetNote != null && String(presetNote).trim() !== "") ? String(presetNote) : "";
       try{ paySetMiniText(); }catch(e){}
+      // v6: prefill receipt input when possible (student profile)
+      try{ setTimeout(function(){ try{ payPrefillReceiptFromProfile(); }catch(e){} }, 60); }catch(e){}
       // v8: do not auto-focus (prevents page jump). Input handled via dock.
     }catch(e){}
   }
@@ -7100,6 +7335,7 @@ var __skipDockFocus = false;
       function setMode(mode){
         try{
           if(!window.PAY) window.PAY = {};
+          PAY.__prevReceiptMode = (PAY && PAY.receiptMode) ? String(PAY.receiptMode) : "email";
           PAY.receiptMode = mode;
         }catch(e){}
         try{
@@ -7108,17 +7344,39 @@ var __skipDockFocus = false;
         }catch(e){}
         try{
           if(r){
+            // preserve values per mode (do not wipe when switching)
+            try{
+              if(!window.PAY) window.PAY = {};
+              var prevMode = (PAY && PAY.__prevReceiptMode) ? String(PAY.__prevReceiptMode) : "email";
+              var curVal = String(r.value||"");
+              if(prevMode === "phone") PAY.receiptPhoneValue = curVal;
+              else PAY.receiptEmailValue = curVal;
+            }catch(_e){}
+
             if(mode==="phone"){
-              r.value = "";
               r.placeholder = "הכנס מספר פלאפון";
               r.type = "tel";
               r.setAttribute("inputmode","tel");
+              try{ if(PAY && PAY.receiptPhoneValue != null) r.value = String(PAY.receiptPhoneValue||""); }catch(_e){}
             }else{
-              r.value = "";
               r.placeholder = "הכנס דואר אלקטרוני";
               r.type = "email";
               r.setAttribute("inputmode","email");
+              try{ if(PAY && PAY.receiptEmailValue != null) r.value = String(PAY.receiptEmailValue||""); }catch(_e){}
             }
+
+            // if still empty, try prefill from active student profile without overwriting other mode
+            try{
+              var vnow = String(r.value||"").trim();
+              if(!vnow && typeof payPrefillReceiptFromProfile === "function"){
+                payPrefillReceiptFromProfile();
+                // pull back stored values if prefill populated the other variables
+                try{
+                  if(mode==="phone" && PAY && PAY.receiptPhoneValue != null) r.value = String(PAY.receiptPhoneValue||"");
+                  if(mode!=="phone" && PAY && PAY.receiptEmailValue != null) r.value = String(PAY.receiptEmailValue||"");
+                }catch(_e){}
+              }
+            }catch(_e){}
           }
         }catch(e){}
       }
@@ -18314,26 +18572,125 @@ function openLessonsHistory(){
     }
 
 
-    // Row clicks (inside secretary student profile modal)
-    var rowDone = document.getElementById('spLessonsDone');
-    if(rowDone){
-      if(typeof bindReleaseTap === 'function') bindReleaseTap(rowDone, __openLH);
-      else rowDone.addEventListener('click', __openLH);
+    // Row clicks (admin/secretary vs student profile)
+    // IMPORTANT:
+    // - In admin/secretary: clicking balance/lessons-done (inside "פרטי תלמיד") may open history.
+    // - In student: these rows must NOT open anything. Transactions history opens ONLY from "שולם" in payments.
+    var __role = (window.APP_STATE && typeof window.APP_STATE.get === 'function') ? window.APP_STATE.get('userRole') : (window.APP_STATE ? window.APP_STATE.userRole : null);
+
+    var __isMgr = false, __isSec = false;
+    try{ __isMgr = document.body.classList.contains('manager-mode') || __role === 'manager'; }catch(e){ __isMgr = false; }
+    try{ __isSec = document.body.classList.contains('secretary-mode') || __role === 'secretary'; }catch(e){ __isSec = false; }
+    var __isStudentCtx = (!__isMgr && !__isSec); // default app (student)
+
+    function __closestTr(node){
+      var n = node;
+      while(n && n !== document && n.nodeType === 1){
+        if(n.tagName && String(n.tagName).toLowerCase() === 'tr') return n;
+        n = n.parentNode;
+      }
+      return null;
+    }
+    function __replaceTrByTdId(tdId){
+      var td = document.getElementById(tdId);
+      if(!td) return null;
+      var tr = __closestTr(td);
+      if(!tr || !tr.parentNode) return td;
+      try{
+        var cl = tr.cloneNode(true);
+        tr.parentNode.replaceChild(cl, tr);
+        return cl.querySelector('#' + tdId) || document.getElementById(tdId);
+      }catch(e){
+        return td;
+      }
+    }
+    function __hardStopOnTr(tdId){
+      var td = document.getElementById(tdId);
+      if(!td) return;
+      var tr = __closestTr(td) || td;
+      function stop(e){
+        try{
+          if(e){
+            e.stopPropagation();
+            if(e.stopImmediatePropagation) e.stopImmediatePropagation();
+          }
+        }catch(_){}
+      }
+      try{
+        tr.addEventListener('click', stop, true);
+      }catch(e){}
     }
 
-    var rowBal = document.getElementById('spBalanceMoney');
+
+    var rowDone = document.getElementById('spLessonsDone');
+    var rowBal  = document.getElementById('spBalanceMoney');
+
+    // Always define open handlers here
+    function __openLH(e){
+      try{ if(e){ e.preventDefault(); } }catch(_){}
+      try{ var m=document.getElementById('lessonsHistoryModal'); if(m) m.classList.add('sec-history-top'); }catch(e){}
+      try{ openLessonsHistory(); }catch(e){}
+    }
     function __openTX(e){
       try{ if(e){ e.preventDefault(); } }catch(_){}
       try{ var m=document.getElementById('secTxHistoryModal'); if(m) m.classList.add('sec-history-top'); }catch(e){}
       try{ if(typeof window.secOpenTransactionsHistoryFromModal === 'function') window.secOpenTransactionsHistoryFromModal(); }catch(e){}
-    }
-    if(rowBal){
-      if(typeof bindReleaseTap === 'function') bindReleaseTap(rowBal, __openTX);
-      else rowBal.addEventListener('click', __openTX);
+      try{
+        // fallback (student)
+        var __tz = '';
+        try{ __tz = String(tzKey || username || '').replace(/\D/g,''); }catch(_e){ __tz=''; }
+        if(__tz && typeof window.openTransactionsHistoryByTz === 'function') window.openTransactionsHistoryByTz(__tz, 'היסטוריית עסקאות לפי ת״ז ' + __tz);
+      }catch(e){}
     }
 
-    
-    if(btn){
+    if(__isStudentCtx){
+      // Hard-remove any existing listeners by replacing the entire TR, then block propagation in capture.
+      rowDone = __replaceTrByTdId('spLessonsDone');
+      rowBal  = __replaceTrByTdId('spBalanceMoney');
+
+      try{ if(rowDone) rowDone.style.cursor = 'default'; }catch(e){}
+      try{ if(rowBal)  rowBal.style.cursor  = 'default'; }catch(e){}
+
+      __hardStopOnTr('spLessonsDone');
+      __hardStopOnTr('spBalanceMoney');
+    }else{
+      // Admin/Secretary behavior stays: row clicks open histories.
+      if(rowDone){
+        if(typeof bindReleaseTap === 'function') bindReleaseTap(rowDone, __openLH);
+        else rowDone.addEventListener('click', __openLH);
+      }
+      if(rowBal){
+        if(typeof bindReleaseTap === 'function') bindReleaseTap(rowBal, __openTX);
+        else rowBal.addEventListener('click', __openTX);
+      }
+    }
+
+    // Student: open transactions history ONLY from "שולם" in payments card
+    // Make the whole KPI box clickable (not just the number), without blocking scroll.
+    var payPaidEl = document.getElementById('spPayPaid');
+    if(payPaidEl && __isStudentCtx){
+      // Remove any previously attached listeners on the value element to avoid double-fire.
+      try{
+        var __clonePaid = payPaidEl.cloneNode(true);
+        if(payPaidEl.parentNode) payPaidEl.parentNode.replaceChild(__clonePaid, payPaidEl);
+        payPaidEl = __clonePaid;
+      }catch(e){}
+
+      var __paidBox2 = null;
+      try{ __paidBox2 = (payPaidEl && payPaidEl.closest) ? payPaidEl.closest('.sp-kpi') : null; }catch(e){}
+      var __targetPaid = __paidBox2 || payPaidEl;
+
+      try{ __targetPaid.classList && __targetPaid.classList.add('sp-kpiClickable'); }catch(e){}
+      try{ __targetPaid.style.cursor = 'pointer'; }catch(e){}
+
+      if(typeof bindReleaseTap === 'function') bindReleaseTap(__targetPaid, __openTX);
+      else __targetPaid.addEventListener('click', __openTX);
+    }
+
+
+
+
+if(btn){
       btn.addEventListener('click', function(e){
         e.preventDefault();
         openLessonsHistory();
@@ -22224,3 +22581,29 @@ function __bindMgrLogoutBtn(){
     }
   }catch(e){}
 })();
+
+
+function cleanupStudentProfileStrayFooterNumber(){
+  try{
+    var page = document.getElementById('studentProfilePage');
+    if(!page) return;
+    // prefer inside scroller content to avoid touching header/grip
+    var inner = page.querySelector('.page-content-scroll') || page.querySelector('.page-inner') || page;
+    // remove single digit text nodes (e.g., stray "2") that end up as loose nodes
+    var walker = document.createTreeWalker(inner, NodeFilter.SHOW_TEXT, null);
+    var toRemove = [];
+    while(walker.nextNode()){
+      var n = walker.currentNode;
+      if(!n) continue;
+      var t = (n.nodeValue || '').trim();
+      if(t === '2'){
+        // ensure it's really a loose node (not inside a meaningful element)
+        var p = n.parentElement;
+        if(p && (p === inner || p.classList.contains('page-content-scroll') || p.classList.contains('sp-wrap') || p.classList.contains('studentProfilePage'))){
+          toRemove.push(n);
+        }
+      }
+    }
+    toRemove.forEach(function(n){ try{ n.parentNode && n.parentNode.removeChild(n); }catch(e){} });
+  }catch(e){}
+}
