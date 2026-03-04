@@ -1158,8 +1158,41 @@ function ensureCloseSliderOnPage(page){
   if(page._closeSliderBound) return;
   page._closeSliderBound = true;
 
-  // Scroll happens inside .page-inner (not on .page)
-  var scrollEl = page.querySelector('.page-inner') || page;
+  // Scroll happens inside a dedicated content scroller (so the grip area can mask content cleanly)
+  var inner = page.querySelector('.page-inner') || page;
+
+  // Build grip header + content scroller wrapper (only once)
+  var gripEl = null;
+  var scrollEl = null;
+  try{
+    gripEl = inner.querySelector('.page-grip-header');
+    scrollEl = inner.querySelector('.page-content-scroll');
+
+    if(!scrollEl){
+      // create grip header if missing
+      if(!gripEl){
+        gripEl = document.createElement('div');
+        gripEl.className = 'page-grip-header';
+        gripEl.innerHTML = '<div class="page-grip-handle"></div><div class="page-grip-divider"></div>';
+        inner.insertBefore(gripEl, inner.firstChild);
+      }
+
+      // create content scroll wrapper and move the remaining content into it
+      scrollEl = document.createElement('div');
+      scrollEl.className = 'page-content-scroll';
+
+      while(gripEl.nextSibling){
+        scrollEl.appendChild(gripEl.nextSibling);
+      }
+      inner.appendChild(scrollEl);
+      try{ inner.classList.add('grip-scroll-ready'); }catch(_e){}
+    }
+  }catch(e){
+    // fallback (should not happen)
+    gripEl = inner;
+    scrollEl = inner;
+  }
+
 
   var startY = 0;
   var active = false;
@@ -1168,13 +1201,10 @@ function ensureCloseSliderOnPage(page){
 
   function thresholdPx(){ return Math.round(window.innerHeight * 0.40); } // ✅ 40%
 
-  function canStart(){
-    try{ return (scrollEl.scrollTop <= 0); }catch(e){ return true; }
-  }
+  function canStart(){ return true; }
 
   function onStart(y){
     if(!page.classList.contains('show')) return;
-    if(!canStart()){ active = false; dragging = false; lastDy = 0; return; }
     startY = y;
     active = true;
     dragging = false;
@@ -1298,20 +1328,20 @@ function ensureCloseSliderOnPage(page){
     lastDy = 0;
   }
 
-  // ✅ מאזינים על אזור הגלילה כדי לדעת אם אפשר להתחיל סגירה
-  scrollEl.addEventListener('touchstart', function(e){
+  // ✅ מאזינים על ה-GRIP בלבד (כדי שלא יגרור כשמגלגלים תוכן)
+  gripEl.addEventListener('touchstart', function(e){
     if(e.touches && e.touches.length===1) onStart(e.touches[0].clientY);
   }, {passive:true});
 
-  scrollEl.addEventListener('touchmove', function(e){
+  gripEl.addEventListener('touchmove', function(e){
     if(e.touches && e.touches.length===1) onMove(e.touches[0].clientY, e);
   }, {passive:false});
 
-  scrollEl.addEventListener('touchend', function(){ onEnd(); }, {passive:true});
-  scrollEl.addEventListener('touchcancel', function(){ onEnd(); }, {passive:true});
+  gripEl.addEventListener('touchend', function(){ onEnd(); }, {passive:true});
+  gripEl.addEventListener('touchcancel', function(){ onEnd(); }, {passive:true});
 
   // Mouse (desktop)
-  scrollEl.addEventListener('mousedown', function(e){ onStart(e.clientY); });
+  gripEl.addEventListener('mousedown', function(e){ onStart(e.clientY); });
   document.addEventListener('mousemove', function(e){ onMove(e.clientY, e); });
   document.addEventListener('mouseup', function(){ onEnd(); });
 }
