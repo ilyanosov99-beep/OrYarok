@@ -114,6 +114,21 @@ body.theme-day .shopconfirm-title{
   color:#111;
 }
 
+/* Day mode: shop pages text (headers/labels/prices) must be readable */
+body.theme-day .shop-mini,
+body.theme-day .shop-mini-order,
+body.theme-day .shop-card-sub,
+body.theme-day .shop-price,
+body.theme-day .shopcart-sub,
+body.theme-day .shopcart-summary,
+body.theme-day .shopcart-mini,
+body.theme-day .shopcart-modal-sub,
+body.theme-day .shopcart-close,
+body.theme-day .shopcart-item-actions button:not(.shopcart-btn-remove){
+  color:#111 !important;
+  text-shadow:none !important;
+}
+
 
 
 /* Day mode: do NOT blur the whole page (prevents blur behind logo) */
@@ -640,7 +655,10 @@ body:not(.theme-day) #secComposeOverlay .leave-msg-btn{
   width: 100%;
   min-width: 0;
 
+  /* IMPORTANT: do NOT scroll the whole sub-page.
+     Scrolling happens only inside .page-content-scroll so the grip header stays locked. */
   overflow: hidden;
+  overscroll-behavior: contain;
   background: transparent;
   isolation: isolate;
 }
@@ -664,7 +682,7 @@ pointer-events: auto;
 /* רקע קבוע לסאב-פייג' (לא זז בזמן גלילה בתוך page-inner) */
 .page::before{
   content:"";
-  position:absolute;
+  position:fixed;
   top: var(--page-top-limit); /* מתחיל מתחת ללוגו */
   left:0;
   right:0;
@@ -677,7 +695,7 @@ pointer-events: auto;
 
 .page::after{
   content:"";
-  position:absolute;
+  position:fixed;
   /* keep the area above the sub-page (logo area) fully transparent */
   top: var(--page-top-limit);
   left: 0;
@@ -685,31 +703,38 @@ pointer-events: auto;
   bottom: 0;
   z-index:1;
   pointer-events:none;
-  background: linear-gradient(to bottom, rgba(0,0,0,.10) 0%, rgba(0,0,0,.15) 45%, rgba(0,0,0,.20) 100%);
+  /* Background/blur are theme-specific (see body.theme-day .page::after etc.). */
+  background: none;
 }
 
 .page-inner{
   position: relative;
   z-index: 2;
 
+  /* The frame fills the available page space.
+     Content scrolling is handled by .page-content-scroll (installed by ensureCloseSliderOnPage). */
   flex: 1 1 auto;
   min-height: 0;
+  height: 100%;
+  max-height: 100%;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+
   min-width: 0;
   width: 100%;
   box-sizing: border-box;
-  max-height: calc(var(--app-vh) - var(--page-top-limit) - var(--safe-bottom, 0px));
+  /*
+    Fix: allow sub-pages to reach the real bottom.
+    .page already has padding-top: var(--page-top-limit), so subtracting it again here
+    clamps the scroll area too early and cuts long content.
+  */
+  /* no inner max-height clamp here; the page itself already accounts for top/bottom limits */
 
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
 
   border-radius: 22px;
-  padding-top: 18px;
-  padding-left: calc(18px + var(--safe-left, 0px));
-  padding-inline-start: calc(18px + var(--safe-left, 0px));
-  padding-right: calc(18px + var(--safe-right, 0px));
-  padding-inline-end: calc(18px + var(--safe-right, 0px));
-  padding-bottom: calc(220px + var(--safe-bottom, 0px));
-  scroll-padding-bottom: calc(220px + var(--safe-bottom, 0px));
+  /* paddings are applied on .page-content-scroll to keep grip header locked */
+  padding: 0;
 
   background: transparent;
 }
@@ -742,8 +767,8 @@ pointer-events: auto;
 .page .page-inner{ position: relative; }
 .page .page-inner::after{
   content:"";
-  position:absolute;
-  top:14px;
+  position:fixed;
+  top: calc(var(--page-top-limit) + 14px);
   left:51%;
   transform:translateX(-50%);
   width:64px;
@@ -753,7 +778,7 @@ pointer-events: auto;
   box-shadow: 0 2px 10px rgba(0,0,0,.22);
   opacity:.92;
   pointer-events:none;
-  z-index:3;
+  z-index:20020;
 }
 
 /* Day mode: sub-page top drag hint bar should be dark */
@@ -969,7 +994,7 @@ body.menu-open::before{
 .home-contact-btn,
 .home-shop-btn,
 .home-location-btn{ left: var(--top-icon-inset); top: var(--top-icon-top); right: auto; bottom: auto; width: var(--top-icon-size); height: var(--top-icon-size); overflow:hidden; border-radius:50%; }
-.home-profile-btn{ position:fixed; left: calc(var(--top-icon-inset) - 6px); right:auto; top: var(--top-icon-top); bottom:auto; width: var(--top-icon-size); height: var(--top-icon-size); overflow:hidden; border-radius:50%; }
+.home-profile-btn{ position:fixed; left: calc(var(--top-icon-inset) - 2px); right:auto; top: var(--top-icon-top); bottom:auto; width: var(--top-icon-size); height: var(--top-icon-size); overflow:hidden; border-radius:50%; }
 
 .home-contact-btn{ right:8px; inset-inline-end:8px; bottom:20px; width:var(--home-icon-size-sm); height:var(--home-icon-size-sm); }
 .home-location-btn{ right:100px; inset-inline-end:100px; bottom:16px; width:var(--home-loc-icon-size); height:calc(var(--home-loc-icon-size) + clamp(0px, .5vw, 2px)); }
@@ -1206,8 +1231,63 @@ button{
 }
 
 /* TIMER UI */
-#timerPage .page-inner{max-height:calc(100dvh - var(--page-top-limit) - var(--page-bottom-limit));overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding-bottom:140px;}
+#timerPage .page-inner{
+  /* Fill the whole subpage frame to the bottom (no inner max-height clamp) */
+  height: 100%;
+  max-height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  /* keep a small safe area padding instead of a large hardcoded spacer */
+  padding-bottom: calc(24px + env(safe-area-inset-bottom, 0px));
+}
+#timerPage{overflow-x:hidden;touch-action:pan-y;overscroll-behavior-x:none;}
+#timerPage .page-inner{touch-action:pan-y;overscroll-behavior-x:none;}
+
+/* TIMER UI - hard lock horizontal overflow (v6) */
+#timerPage, #timerPage .page-inner{ overflow-x:hidden !important; }
+#timerPage .page-inner{ width:100%; max-width:100%; box-sizing:border-box; }
+#timerPage *{ max-width:100%; box-sizing:border-box; }
+
 .timer-wrap{width:100%;max-width:520px;display:flex;flex-direction:column;align-items:center;gap:14px;}
+/* TIMER - DAY MODE TEXT (v3 fix) */
+body.theme-day #timerPage{color:#111;}
+body.theme-day #timerPage .page-title,
+body.theme-day #timerPage .lesson-count,
+body.theme-day #timerPage .lesson-count div,
+body.theme-day #timerPage .timer-settings .ts-title,
+body.theme-day #timerPage .timer-settings .ts-label,
+body.theme-day #timerPage .timer-settings .ts-control,
+body.theme-day #timerPage .timer-settings .ts-val,
+body.theme-day #timerPage .ts-picker-btn{
+  color:#111 !important;
+}
+/* keep timer box text readable on dark box */
+body.theme-day #timerPage .timer-box .timer-time,
+body.theme-day #timerPage .timer-box .timer-hint{
+  color:#fff !important;
+}
+body.theme-day #timerPage .lesson-ctl{
+  background: rgba(0,0,0,.06);
+  border-color: rgba(0,0,0,.12);
+}
+body.theme-day #timerPage .timer-settings{
+  background: rgba(0,0,0,.06);
+  border-color: rgba(0,0,0,.10);
+}
+body.theme-day #timerPage .timer-settings .ts-row{
+  border-top-color: rgba(0,0,0,.10);
+}
+body.theme-day #timerPage .timer-settings .ts-control{
+  background: rgba(255,255,255,.75);
+  border-color: rgba(0,0,0,.14);
+}
+body.theme-day #timerPage .ts-picker-btn{
+  background: rgba(255,255,255,.75);
+  border-color: rgba(0,0,0,.14);
+}
+body.theme-day #timerPage .lesson-btn svg{ fill:#111; }
+
 .timer-row{width:100%;display:flex;align-items:center;justify-content:center;gap:12px;flex-wrap:wrap;}
 .lesson-ctl{display:flex;align-items:center;justify-content:center;gap:10px;padding:10px 12px;border-radius:16px;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.18);flex:0 0 auto;}
 .timer-box{flex:1 1 320px;min-width:240px;max-width:520px;text-align:center;padding:14px 10px;border-radius:18px;background:rgba(0,0,0,.35);border:1px solid rgba(255,255,255,.18);backdrop-filter:blur(2px);}
@@ -1215,6 +1295,14 @@ button{
 .timer-hint{font-size:14px;color:rgba(255,255,255,.85);}
 .lesson-btn{width:44px;height:44px;border-radius:14px;background:rgba(255,255,255,.18);border:1px solid rgba(255,255,255,.22);display:flex;align-items:center;justify-content:center;pointer-events:auto;}
 .lesson-btn svg{width:22px;height:22px;fill:rgba(255,255,255,.95);}
+
+/* Timer: day mode (+/- buttons) */
+body.theme-day #timerPage .lesson-btn{
+  background: rgba(0,0,0,.06);
+  border: 1px solid rgba(0,0,0,.16);
+}
+body.theme-day #timerPage .lesson-btn svg{ fill: rgba(0,0,0,.78); }
+
 .lesson-count{min-width:52px;text-align:center;font-size:18px;font-weight:900;color:#fff;}
 .timer-actions{width:100%;display:flex;gap:10px;flex-wrap:wrap;}
 .action-btn{width:100%;padding:14px 12px;border-radius:16px;border:1px solid rgba(255,255,255,.22);font-weight:900;font-size:16px;pointer-events:auto;}
@@ -1960,10 +2048,12 @@ body.start-open .start-modal{
   z-index:540000;
   display:none;
   /* Keep modal stable when keyboard opens (avoid re-centering) */
-  align-items:flex-start;
+  align-items:center;
   justify-content:center;
   padding:1.5vh 10px;
   box-sizing:border-box;
+  overflow:auto;
+  -webkit-overflow-scrolling:touch;
   /* Make the payment overlay opaque enough so the home screen won't show through */
   background:rgba(0,0,0,.92);
   -webkit-backdrop-filter:none;
@@ -2044,6 +2134,35 @@ body.pay-open .home-profile-btn{
   background:rgba(55,40,10,.35);
 }
 
+/* v6: Payment actions colors */
+#payConfirmBtn{
+  border-color: rgba(0,255,170,.70);
+  background: rgba(0,130,85,.32);
+  box-shadow: 0 10px 24px rgba(0,0,0,.35), inset 0 0 0 1px rgba(0,255,170,.25);
+}
+#payCancelBtn{
+  border-color: rgba(255,80,80,.72);
+  background: rgba(120,0,0,.22);
+  box-shadow: 0 10px 24px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,80,80,.18);
+}
+
+/* v6: Day mode receipt toggle tabs */
+body.theme-day .receipt-tab{
+  background: rgba(0,0,0,.06);
+  border-color: rgba(0,0,0,.18);
+  color: rgba(0,0,0,.86);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.35);
+}
+body.theme-day .receipt-tab.active{
+  background: rgba(0,180,120,.22);
+  border-color: rgba(0,180,120,.55);
+  color: rgba(0,0,0,.90);
+  box-shadow: 0 10px 22px rgba(0,0,0,.18), inset 0 0 0 1px rgba(0,180,120,.18);
+}
+body.theme-day .receipt-hint{
+  color: rgba(0,0,0,.55);
+}
+
 /* Packages inside payment modal */
 .pay-packages{
   margin: 10px 0 12px;
@@ -2118,6 +2237,63 @@ body.pay-open .home-profile-btn{
   font-size: 12px;
   color: rgba(255,255,255,.70);
   line-height: 1.45;
+}
+
+
+/* ===== Pay modal: Day mode overrides ===== */
+body.theme-day .pay-overlay{
+  background: rgba(255,255,255,.92);
+}
+body.theme-day .pay-modal{
+  background:#ffffff;
+  border:2px solid rgba(0,0,0,.86);
+  box-shadow:0 22px 50px rgba(0,0,0,.22);
+}
+body.theme-day .pay-title{
+  color:#111;
+}
+body.theme-day .pay-label{
+  color: rgba(0,0,0,.80);
+}
+body.theme-day .pay-input{
+  background: rgba(0,0,0,.04);
+  border: 1px solid rgba(0,0,0,.18);
+  color:#111;
+}
+body.theme-day .pay-input::placeholder{
+  color: rgba(0,0,0,.35);
+}
+body.theme-day .pay-btn{
+  background: rgba(230,245,240,.85);
+  border-color: rgba(0,155,120,.42);
+  color:#111;
+}
+body.theme-day .pay-btn.primary{
+  background: rgba(255,245,225,.95);
+  border-color: rgba(180,130,40,.78);
+  color:#111;
+}
+body.theme-day .pay-packages{
+  background: rgba(0,0,0,.04);
+  border: 1px solid rgba(0,0,0,.10);
+}
+body.theme-day .pay-packages-title{
+  color: rgba(0,0,0,.75);
+}
+body.theme-day .pay-pack{
+  background: rgba(0,155,120,.08);
+  border-color: rgba(0,155,120,.30);
+  color:#111;
+}
+body.theme-day .pay-pack .p2{
+  color: rgba(160,110,0,.95);
+}
+body.theme-day .pay-pack.active{
+  border-color: rgba(180,130,40,.78);
+  box-shadow: 0 0 0 2px rgba(180,130,40,.10), 0 10px 22px rgba(0,0,0,.18);
+}
+body.theme-day .pay-mini{
+  color: rgba(0,0,0,.65);
 }
 
 /* ===== Student Profile Page readability (no external styles) ===== */
@@ -2262,6 +2438,28 @@ body.pay-open .home-profile-btn{
   background: rgba(255,255,255,.06);
   padding: 10px 10px;
   min-height: 54px;
+}
+
+/* KPI buttons: add "פתח היסטורייה" label on the left (student profile) */
+.sp-kpi.sp-kpiBtn{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+}
+.sp-kpi.sp-kpiBtn .sp-kpi-main{
+  display:block;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.sp-kpi.sp-kpiBtn .sp-kpi-open{
+  flex: 0 0 auto;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1.05;
+  opacity: .85;
+  text-align: left;
+  padding-left: 2px;
 }
 #studentProfilePage .sp-kpi .l{
   font-size: 12px;
@@ -2762,6 +2960,49 @@ body.pay-open .home-profile-btn{
    ======================= */
 #signupPage{
   color:#eaf7f2;
+}
+
+/* v13: Signup as floating modal (overlay), not a subpage */
+#signupPage.su-overlay{
+  position: fixed;
+  inset: 0;
+  z-index: 1000000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0,0,0,.66);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+}
+#signupPage.su-overlay.show{ display:flex; }
+
+#signupPage.su-overlay .su-overlayScroll{
+  width: 100%;
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  padding: 18px 14px calc(22px + env(safe-area-inset-bottom, 0px)) 14px;
+  box-sizing: border-box;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+#signupPage.su-overlay .su-stage{
+  width: 100%;
+  max-width: 900px;
+  margin: 0 auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+#signupPage.su-overlay .su-modal{
+  width: min(560px, 100%);
+  max-width: 560px;
+  min-height: unset;
+  border-radius: 28px;
 }
 
 /* Signup page: avoid extra top tint overlay from generic page-inner */
@@ -3748,8 +3989,19 @@ body.pay-open #homeVignette{
 }
 .pm-row.unread .pm-dot{ display:inline-block; }
 
+.pm-read-under{
+  display:none;
+  font-weight:800;
+  font-size:11px;
+  color: rgba(234,247,242,.60);
+  margin-top:4px;
+  text-align:right;
+}
+.pm-row:not(.unread) .pm-read-under{ display:block; }
+
 /* message view modal */
 .pmViewMeta{ margin-bottom:10px; color:rgba(234,247,242,.65); font-weight:700; font-size:12px; }
+
 .pmViewBody{ color:rgba(234,247,242,.92); line-height:1.55; white-space:pre-wrap; word-break:break-word; }
 
 /* ===== PRIVATE MESSAGE VIEW: match "תשלום על שיעור" modal background ===== */
@@ -3759,43 +4011,45 @@ body.pay-open #homeVignette{
   box-shadow: 0 22px 50px rgba(0,0,0,.55);
 }
 #pmViewModal .modalTop{
-  /* keep title pinned to RIGHT edge, independent from close button */
   position: relative;
-  height:36px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  min-height:44px;
+  padding: 10px 16px;
   margin-bottom: 12px;
 }
 #pmViewModal .modalTitle{
-  position:absolute;
-  top:0;
-  right:0;
-  left:96px; /* keep clear space for close button on the left */
-  height:36px;
-  line-height:36px;
-  padding:0;
   margin:0;
-  color:#fff;
+  width:100%;
+  padding-right:56px; /* space for close button on the right */
+  padding-left:12px;
+  font-weight: 900;
+  font-size: 18px;
+  line-height: 24px;
   direction: rtl;
-  text-align:right;
-  text-align:end;
-  font-weight:900;
+  text-align: right;
+  text-align: end;
+  color:#fff;
 }
 #pmViewModal .modalClose{
   position:absolute;
-  left:0;
-  top:3px;
-  height:25px;
-  padding:0 10px;
-  border-radius:9px;
-  border:1px solid rgba(255,255,255,.78);
-  background: rgba(0,0,0,.28);
+  right:14px;
+  top:10px;
+  width:42px;
+  height:34px;
+  border-radius:12px;
+  border:1px solid rgba(255,255,255,.55);
+  background: rgba(0,0,0,.22);
   color:#fff;
   font-weight:900;
-  font-size:12px;
+  font-size:18px;
   cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
   box-shadow: 0 10px 18px rgba(0,0,0,.18);
 }
-#pmViewModal .modalBody{ direction: rtl; text-align:right;
-  text-align:end; }
 #pmViewModal .modalClose:active{ transform: translateY(1px); }
 #pmViewModal .pmViewMeta{ color: rgba(234,247,242,.70); }
 #pmViewModal .pmViewBody{ color: rgba(234,247,242,.95); }
@@ -3805,10 +4059,11 @@ body.pay-open #homeVignette{
 
 .shop-cart-btn{
   position: fixed;
-  top: calc(var(--safe-top, 0px) + 14px);
-  right: 14px;
-  width: 64px;
-  height: 64px;
+  top: calc(var(--top-icon-top) + 8px);
+  right: auto;
+  left: calc(var(--top-icon-inset) + 6px);
+  width: var(--top-icon-size);
+  height: var(--top-icon-size);
   padding: 0;
   border: none;
   background: transparent;
@@ -3840,8 +4095,8 @@ body.shopcart-page .shop-cart-btn{
 
 /* Checkout options */
 .shop-cart-btn img{
-  width: 100%;
-  height: 100%;
+  width: 88%;
+  height: 88%;
   object-fit: contain;
   background: transparent;
   border-radius: 999px;
@@ -4709,12 +4964,50 @@ body.admin-open #usedBikesPage .license-pay-row{display:none !important;}
   #timerPage .timer-settings .ts-val{ width:48px; flex-basis:48px; }
 }
 
-/* ===== TIMER PICKER (custom, fixes Android WebView select scroll/IME quirks) ===== */
+/* 
+
+/* Day mode: FORUM cards should be light (match app day theme) */
+body.theme-day #forumPage .forum-card,
+body.theme-day #forumPage .q-card,
+body.theme-day #forumPage .answer{
+  background: rgba(255,255,255,0.92);
+  border: 1px solid rgba(0,0,0,0.10);
+}
+
+body.theme-day #forumPage .forum-input{
+  background: rgba(255,255,255,0.95);
+  border: 1px solid rgba(0,0,0,0.12);
+  color: #111;
+}
+body.theme-day #forumPage .forum-input::placeholder{ color: rgba(0,0,0,0.35); }
+
+body.theme-day #forumPage .like-btn{
+  background: rgba(0,0,0,0.04);
+  border: 1px solid rgba(0,0,0,0.10);
+  color: #111;
+}
+body.theme-day #forumPage .answers{
+  border-top: 1px dashed rgba(0,0,0,0.18);
+}
+
+body.theme-day #forumPage .forum-btn.ghost{
+  background: rgba(0,0,0,0.06);
+  border: 1px solid rgba(0,0,0,0.10);
+  color: #111;
+}
+===== TIMER PICKER (custom, fixes Android WebView select scroll/IME quirks) ===== */
 .ts-hidden-select{
+  /* visually hidden without creating huge scrollWidth (fixes timer drift) */
   position:absolute !important;
-  left:-9999px !important;
   width:1px !important;
   height:1px !important;
+  padding:0 !important;
+  margin:-1px !important;
+  overflow:hidden !important;
+  clip:rect(0,0,0,0) !important;
+  clip-path: inset(50%) !important;
+  border:0 !important;
+  white-space:nowrap !important;
   opacity:0 !important;
   pointer-events:none !important;
 }
@@ -5004,6 +5297,71 @@ body.manager-open #managerOverlay *{
   overscroll-behavior-x: none;
   touch-action: pan-y;
 }
+
+/* Day mode: manager/secretary overlay must be readable (same approach as tests day UI) */
+body.theme-day .manager-overlay{
+  background: transparent;
+}
+body.theme-day #managerOverlay .mgr-full{
+  color:#111;
+}
+body.theme-day #managerOverlay .mgr-topbar{
+  background: rgba(255,255,255,.92);
+  border: 2px solid rgba(0,0,0,.85);
+  backdrop-filter:none;
+  -webkit-backdrop-filter:none;
+}
+body.theme-day #managerOverlay .mgr-top-title,
+body.theme-day #managerOverlay .mgr-shop-h-title,
+body.theme-day #managerOverlay .mgr-view-head,
+body.theme-day #managerOverlay .mgr-kpi-label,
+body.theme-day #managerOverlay .mgr-kpi-sub,
+body.theme-day #managerOverlay .mgr-paydash-range,
+body.theme-day #managerOverlay .mgr-paydash-section-title,
+body.theme-day #managerOverlay .mgr-split-title,
+body.theme-day #managerOverlay .mgr-kpi-value{
+  color:#111;
+}
+body.theme-day #managerOverlay .mgr-select-dark,
+body.theme-day #managerOverlay .mgr-input-dark,
+body.theme-day #managerOverlay .mgr-textarea-dark,
+body.theme-day #managerOverlay .mgr-paydash-select,
+body.theme-day #managerOverlay .mgr-paydash-date{
+  background: rgba(0,0,0,.04);
+  border: 1px solid rgba(0,0,0,.25);
+  color:#111;
+}
+body.theme-day #managerOverlay .mgr-input-dark::placeholder,
+body.theme-day #managerOverlay .mgr-textarea-dark::placeholder{
+  color: rgba(0,0,0,.45);
+}
+body.theme-day #managerOverlay .mgr-topbtn,
+body.theme-day #managerOverlay .mgr-paydash-nav,
+body.theme-day #managerOverlay .mgr-paydash-btn{
+  background: rgba(0,0,0,.04);
+  border: 2px solid rgba(0,0,0,.55);
+  color:#111;
+}
+body.theme-day #managerOverlay .mgr-mini-btn{
+  color:#111;
+  border: 2px solid rgba(18,110,70,.65);
+  background: rgba(25,150,90,.18);
+}
+body.theme-day #managerOverlay .mgr-shop-section,
+body.theme-day #managerOverlay .mgr-table-wrap-dark,
+body.theme-day #managerOverlay .mgr-kpi-card,
+body.theme-day #managerOverlay .mgr-paydash-split,
+body.theme-day #managerOverlay .mgr-split-card{
+  background: rgba(255,255,255,.70);
+  border: 1px solid rgba(0,0,0,.18);
+  box-shadow: 0 10px 24px rgba(0,0,0,.12);
+}
+body.theme-day #managerOverlay .mgr-table-dark th,
+body.theme-day #managerOverlay .mgr-table-dark td{
+  color:#111;
+  border-bottom: 1px solid rgba(0,0,0,.10);
+}
+body.theme-day #managerOverlay .mgr-table-dark th{ color: rgba(0,0,0,.70); }
 
 /* Prevent slight horizontal drift in manager pages (shop/students/payments) */
 #managerOverlay, #managerOverlay .mgr-full{ max-width:100%; overflow-x:hidden; }
@@ -5334,12 +5692,19 @@ body.manager-open #managerOverlay *{
   font-size: 13.5px;
 }
 .mgr-hidden-file{
-  position: absolute !important;
-  left: -9999px !important;
-  width: 1px !important;
-  height: 1px !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
+  /* visually hidden without creating huge scrollWidth */
+  position:absolute !important;
+  width:1px !important;
+  height:1px !important;
+  padding:0 !important;
+  margin:-1px !important;
+  overflow:hidden !important;
+  clip:rect(0,0,0,0) !important;
+  clip-path: inset(50%) !important;
+  border:0 !important;
+  white-space:nowrap !important;
+  opacity:0 !important;
+  pointer-events:none !important;
 }
 @media (max-width:420px){
   .mgr-row-img-actions{ flex-wrap: nowrap; }
@@ -5723,10 +6088,83 @@ body.kb-open .shopdetails-body{
   color:#fff;
 }
 
+
+
+/* ===== Book Test Page: Day Mode overrides (v2) ===== */
+body.theme-day #bookTestPage .page-inner{
+  color:#111;
+}
+body.theme-day #bookTestPage .page-title{
+  color:#111;
+}
+body.theme-day #bookTestPage .page-sub{
+  color: rgba(0,0,0,.72);
+}
+
+body.theme-day .bt-box{
+  background: rgba(255,255,255,.78);
+  border: 1px solid rgba(0,0,0,.10);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+body.theme-day .bt-row{
+  border-bottom: 1px solid rgba(0,0,0,.08);
+}
+body.theme-day .bt-row .k{
+  color: rgba(0,0,0,.66);
+}
+body.theme-day .bt-row .v{
+  color:#111;
+}
+
+body.theme-day .bt-order-btn{
+  border: 1px solid rgba(34,197,94,.45);
+  background: rgba(34,197,94,.28);
+  color:#111;
+}
+body.theme-day .bt-note{
+  color: rgba(0,0,0,.62);
+}
+
+/* Day mode: book-test warning modals */
+body.theme-day #btInsufficientOverlay .bt-modal,
+body.theme-day #btAlreadyOverlay .bt-modal{
+  background: rgba(255,255,255,.96);
+  border: 1px solid rgba(0,0,0,.12);
+  color:#111;
+}
+body.theme-day #btInsufficientOverlay .bt-modal-text,
+body.theme-day #btAlreadyOverlay .bt-modal-text{
+  color: rgba(0,0,0,.78);
+}
+body.theme-day #btInsufficientOverlay .leave-msg-btn,
+body.theme-day #btAlreadyOverlay .leave-msg-btn{
+  border: 2px solid rgba(0,0,0,.85);
+  background: rgba(0,0,0,.06);
+  color:#111;
+}
+
+
 /* v15->v16: smooth fade between profile and back (home) icons */
 #homeBtn, #profileBtn{
   transition: opacity 180ms ease;
   will-change: opacity;
+}
+
+/* When secretary tests overlay is open, ensure the *existing* Home button sits above the overlay */
+body.sec-tests-overlay-open #homeBtn{
+  z-index: 100000 !important;
+  display:inline-flex !important;
+}
+
+/* Secretary: show the EXISTING Home button also for shop popup + manager overlay (no custom button) */
+body.sec-shop-overlay-open #homeBtn{
+  z-index: 100000 !important;
+  display:inline-flex !important;
+}
+body.manager-open #homeBtn{
+  z-index: 100000 !important;
+  display:inline-flex !important;
 }
 
 /* ===== SETTINGS UI (v1) ===== */
@@ -5933,6 +6371,11 @@ body.is-ltr .menu-header-bar{
 
 html.dock-lock{ overflow:hidden; }
 body.dock-lock{ overflow:hidden; touch-action:none; }
+
+/* Timer viewport freeze (hard fix for sideways drifting) */
+html.timer-freeze{ overflow:hidden; overscroll-behavior-x:none; }
+body.timer-freeze{ overflow:hidden; overscroll-behavior-x:none; touch-action:pan-y; }
+
 .input-dock{
   position:fixed;
   left:0;
@@ -7001,6 +7444,7 @@ input[type="reset"] {
   height:100vh;
   max-height:100vh;
   overflow:auto;
+  overflow-x:hidden;
   border-radius:0;
   box-shadow:none;
 }
@@ -7555,7 +7999,9 @@ body.theme-day .page-grip-divider{ background: rgba(0,0,0,.14); }
 
 /* The actual scrolling happens here (so content cannot slide under the grip header) */
 .page .page-content-scroll{
-  height: 100%;
+  flex: 1 1 auto;
+  height: auto;
+  min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
 
@@ -7589,6 +8035,7 @@ body.theme-day .page-grip-divider{ background: rgba(0,0,0,.14); }
 
 
 /* Day mode: student profile page should match other sub-pages (no dark grey override) */
+/* Day mode: student profile - readable black text + lighter panels */
 body.theme-day #studentProfilePage .page-inner{
   background: rgba(255,255,255,0.06) !important;
   border: 2px solid rgba(34,197,94,0.55) !important;
@@ -7597,7 +8044,316 @@ body.theme-day #studentProfilePage .page-inner{
   -webkit-backdrop-filter: none !important;
 }
 
+body.theme-day #studentProfilePage,
+body.theme-day #studentProfilePage *{
+  color: #111 !important;
+  text-shadow: none !important;
+}
+
+body.theme-day #studentProfilePage p{ color: rgba(0,0,0,.78) !important; }
+body.theme-day #studentProfilePage .sp-card{
+  background: rgba(245,245,245,.92) !important;
+  border: 1px solid rgba(0,0,0,.10) !important;
+}
+body.theme-day #studentProfilePage .sp-card-h{
+  background: rgba(0,0,0,.04) !important;
+  border-bottom: 1px solid rgba(0,0,0,.08) !important;
+}
+body.theme-day #studentProfilePage .sp-pill{
+  background: rgba(0,0,0,.05) !important;
+  border: 1px solid rgba(0,0,0,.10) !important;
+}
+body.theme-day #studentProfilePage .sp-table td.k{ color: rgba(0,0,0,.65) !important; }
+body.theme-day #studentProfilePage .sp-btn{
+  background: rgba(0,0,0,.06) !important;
+  border: 1px solid rgba(0,0,0,.12) !important;
+  color: #111 !important;
+}
+
+/* Day mode: keep KPI frames visually separated like night mode (only colors differ) */
+body.theme-day #studentProfilePage .sp-kpi{
+  background: rgba(0,0,0,.035) !important;
+  border: 1px solid rgba(0,0,0,.12) !important;
+}
+body.theme-day #studentProfilePage .sp-kpi .l{ color: rgba(0,0,0,.65) !important; }
+body.theme-day #studentProfilePage .sp-muted{ color: rgba(0,0,0,.58) !important; }
+
 
 /* Student Profile title color: day=black, night=white */
 body.theme-day #studentProfilePage .sp-head h1{ color:#111 !important; text-shadow:none !important; }
 body.theme-night #studentProfilePage .sp-head h1{ color:#fff !important; }
+
+/* ===== Private Messages View Modal (modern + day/night) ===== */
+#pmViewModal.pmViewBackdrop{ align-items:center; justify-content:center; }
+#pmViewModal .pmViewBox{
+  position: relative;
+  width: min(560px, calc(100vw - 28px));
+  max-height: min(78vh, 640px);
+  border-radius: 22px;
+  overflow:hidden;
+}
+#pmViewModal .pmViewTop{
+  position: relative;
+  padding: 18px 56px 12px 18px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+}
+#pmViewModal .pmViewTitle{
+  font-weight: 900;
+  font-size: 22px;
+  letter-spacing: .2px;
+  text-align:center;
+}
+#pmViewModal .pmViewClose{
+  position:absolute;
+  top: 14px;
+  right: 14px;
+  width: 40px;
+  height: 40px;
+  border-radius: 14px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size: 18px;
+  line-height: 1;
+  border: 1px solid rgba(255,255,255,.18);
+  background: rgba(255,255,255,.10);
+  color: inherit;
+}
+#pmViewModal .pmViewBodyWrap{
+  padding: 12px 18px 18px 18px;
+}
+#pmViewModal .pmViewMeta{
+  opacity: .82;
+  font-weight: 700;
+  margin-bottom: 10px;
+}
+#pmViewModal .pmViewBody{
+  white-space: pre-wrap;
+  line-height: 1.45;
+  font-size: 16px;
+}
+
+/* Night */
+body:not(.theme-day) #pmViewModal .pmViewBox{
+  background: rgba(15,17,20,.92);
+  border: 1px solid rgba(255,255,255,.18);
+  box-shadow: 0 18px 60px rgba(0,0,0,.55);
+  color: #fff;
+}
+body:not(.theme-day) #pmViewModal .pmViewTop{
+  background: rgba(255,255,255,.06);
+  border-bottom: 1px solid rgba(255,255,255,.10);
+}
+body:not(.theme-day) #pmViewModal .pmViewClose{
+  border-color: rgba(255,255,255,.18);
+  background: rgba(255,255,255,.10);
+}
+
+/* Day */
+body.theme-day #pmViewModal .pmViewBox{
+  background: rgba(255,255,255,.94);
+  border: 1px solid rgba(0,0,0,.10);
+  box-shadow: 0 18px 60px rgba(0,0,0,.18);
+  color: #111;
+}
+body.theme-day #pmViewModal .modalTitle{ color:#111; }
+body.theme-day #pmViewModal .pmViewMeta{ color: rgba(0,0,0,.55); }
+body.theme-day #pmViewModal .pmViewBody{ color:#111; }
+body.theme-day #pmViewModal .pmViewTop{
+  background: rgba(0,0,0,.03);
+  border-bottom: 1px solid rgba(0,0,0,.08);
+}
+body.theme-day #pmViewModal .pmViewClose{
+  border-color: rgba(0,0,0,.10);
+  background: rgba(0,0,0,.04);
+}
+
+
+/* Signup modal close buttons */
+.su-modalHeader{ position: relative; padding-top: 14px; }
+.su-closeX{
+  position:absolute;
+  top: 10px;
+  right: 14px;
+  width: 44px;
+  height: 44px;
+  border: 0;
+  border-radius: 14px;
+  background: rgba(255,255,255,.16);
+  color: rgba(255,255,255,.92);
+  font-size: 22px;
+  line-height: 44px;
+  text-align:center;
+  cursor:pointer;
+  box-shadow: 0 10px 26px rgba(0,0,0,.32);
+}
+.su-closeX:active{ transform: translateY(1px); }
+
+.su-btnDanger{
+  min-width: 210px;
+  background: linear-gradient(180deg, rgba(255,120,120,1), rgba(220,60,60,1));
+  color: #fff;
+  box-shadow: 0 18px 40px rgba(0,0,0,.35), 0 0 0 1px rgba(255,120,120,.22);
+}
+
+.su-closeRow{ margin-top: 12px; display:flex; }
+.su-closeRow .su-btn{ width:100%; }
+
+.su-titleRow{ padding-right: 56px; }
+
+
+/* DOB picker (simple day/month/year scrollers) */
+.school-reg-dob-picker{ position:relative; width:100%; }
+.school-reg-dob-picker .dob-bar{
+  width:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  padding:16px 18px;
+  border-radius:18px;
+  border:2px solid rgba(255,255,255,.35);
+  background:rgba(255,255,255,.92);
+  color:#0c2d24;
+  font-weight:800;
+  font-size:20px;
+}
+#licenseRequestPage .school-reg-dob-picker .dob-bar{
+  background:rgba(255,255,255,.92);
+}
+.school-reg-dob-picker .dob-part{ min-width:42px; text-align:center; }
+.school-reg-dob-picker .dob-sep{ opacity:.55; font-weight:700; }
+.school-reg-dob-picker .dob-caret{ margin-inline-start:auto; opacity:.7; font-size:18px; }
+
+.school-reg-dob-picker .dob-panel{
+  position:absolute;
+  left:0; right:0;
+  top:calc(100% + 10px);
+  background:rgba(12,30,24,.96);
+  border:1px solid rgba(255,255,255,.18);
+  border-radius:18px;
+  padding:10px;
+  display:flex;
+  gap:10px;
+  z-index:999999;
+}
+.school-reg-dob-picker .dob-col{
+  flex:1;
+  min-width:0;
+  background:rgba(255,255,255,.06);
+  border-radius:14px;
+  padding:8px;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.school-reg-dob-picker .dob-col-title{
+  font-size:12px;
+  opacity:.75;
+  text-align:center;
+  color:#e9fff4;
+  font-weight:800;
+}
+.school-reg-dob-picker .dob-col-list{
+  height:180px;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+  padding:4px;
+  border-radius:12px;
+}
+.school-reg-dob-picker .dob-item{
+  width:100%;
+  border:none;
+  background:transparent;
+  color:#e9fff4;
+  padding:10px 8px;
+  border-radius:12px;
+  font-weight:800;
+  font-size:16px;
+  text-align:center;
+}
+.school-reg-dob-picker .dob-item:active{ transform:scale(.98); }
+.school-reg-dob-picker .dob-item.selected{
+  background:rgba(120,255,200,.18);
+  border:1px solid rgba(120,255,200,.22);
+}
+
+
+/* DOB picker (signup) */
+.su-dob-picker{ position:relative; width:100%; }
+.su-dob-picker .dob-bar{
+  width:100%;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  padding:16px 18px;
+  border-radius:18px;
+  border:2px solid rgba(255,255,255,.35);
+  background:rgba(255,255,255,.92);
+  color:#0c2d24;
+  font-weight:800;
+  font-size:20px;
+}
+.su-dob-picker .dob-part{ min-width:42px; text-align:center; }
+.su-dob-picker .dob-sep{ opacity:.55; font-weight:700; }
+.su-dob-picker .dob-caret{ margin-inline-start:auto; opacity:.7; font-size:18px; }
+
+.su-dob-picker .dob-panel{
+  position:absolute;
+  left:0; right:0;
+  top:calc(100% + 10px);
+  background:rgba(12,30,24,.96);
+  border:1px solid rgba(255,255,255,.18);
+  border-radius:18px;
+  padding:10px;
+  display:flex;
+  gap:10px;
+  z-index:999999;
+}
+.su-dob-picker .dob-col{
+  flex:1;
+  min-width:0;
+  background:rgba(255,255,255,.06);
+  border-radius:14px;
+  padding:8px;
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+.su-dob-picker .dob-col-title{
+  font-size:12px;
+  opacity:.75;
+  text-align:center;
+  color:#e9fff4;
+  font-weight:800;
+}
+.su-dob-picker .dob-col-list{
+  height:180px;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+  padding:4px;
+  border-radius:12px;
+}
+.su-dob-picker .dob-item{
+  width:100%;
+  border:none;
+  background:transparent;
+  color:#e9fff4;
+  padding:10px 8px;
+  border-radius:12px;
+  font-weight:800;
+  font-size:16px;
+  text-align:center;
+}
+.su-dob-picker .dob-item:active{ transform:scale(.98); }
+.su-dob-picker .dob-item.selected{
+  background:rgba(120,255,200,.18);
+  border:1px solid rgba(120,255,200,.22);
+}
+
+
+/* DOB picker: ensure hidden overrides dob-panel display */
+.dob-panel.hidden{ display:none !important; }

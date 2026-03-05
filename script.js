@@ -88,6 +88,13 @@
     _mem: mem
   };
 
+  // Firebase bridge stub (best-effort). Real implementation can be injected later.
+  // Must never break the app if Firebase is not connected.
+  try{
+    if(!window.FBBridge) window.FBBridge = {};
+    if(typeof window.FBBridge.saveTestOrder !== 'function') window.FBBridge.saveTestOrder = function(/*dateKey, entry*/){ };
+  }catch(e){}
+
   // Central keys: static keys only. Dynamic keys live under DB.key.*
   var KEYS = {
     studentsRegistry: 'students_registry_v1',
@@ -412,6 +419,20 @@ var overlay=document.getElementById(name+"Overlay");
   if(!overlay) return;
   overlay.classList.add("show");
   document.body.classList.add("popup-open");
+
+  // Secretary: use the EXISTING global Home button for closing shop popup (no custom button)
+  try{
+    if(name === 'shop' && document.body.classList.contains('secretary-mode')){
+      document.body.classList.add('sec-shop-overlay-open');
+      var hb = document.getElementById('homeBtn');
+      try{ if(typeof showHomeButton==='function') showHomeButton(); }catch(e){}
+      if(hb && !hb.__secShopCloseCapture){
+        hb.__secShopCloseCapture = function(){ try{ closePopup(true); }catch(e){} };
+        hb.addEventListener('click', hb.__secShopCloseCapture, true);
+      }
+    }
+  }catch(e){}
+
   animatePopupItems(overlay);
 }
 function closePopup(removeClass){
@@ -422,6 +443,26 @@ function closePopup(removeClass){
     resetPopupItems(overlays[i]);
   }
   if(removeClass) document.body.classList.remove("popup-open");
+
+  // Secretary: detach temporary Home capture for shop popup
+  try{
+    document.body.classList.remove('sec-shop-overlay-open');
+    var hb = document.getElementById('homeBtn');
+    if(hb && hb.__secShopCloseCapture){
+      hb.removeEventListener('click', hb.__secShopCloseCapture, true);
+      hb.__secShopCloseCapture = null;
+    }
+    try{
+      var anyOverlay = false;
+      try{ anyOverlay = !!document.querySelector('.overlay.show'); }catch(_e){ anyOverlay = false; }
+      var anyPage = false;
+      try{ anyPage = document.body && document.body.classList && document.body.classList.contains('page-open'); }catch(_e){ anyPage = false; }
+      if(!anyOverlay && !anyPage){
+        try{ if(typeof hideHomeButton==='function') hideHomeButton(); }catch(_e){}
+      }
+    }catch(_e){}
+  }catch(e){}
+
   syncShopOnState();
 }
 // Lightweight overlay helpers (used by book-test warnings etc.)
@@ -458,6 +499,41 @@ function closeOverlay(el){
     if(!el) return;
     if(typeof el === "string") el = document.getElementById(el);
     if(!el) return;
+    // If a special overlay uses the global Home button as its close control,
+    // detach the temporary capture handler when the overlay is closed.
+    try{
+      if(el && el.id === 'secTestOrdersOverlay'){
+        try{ document.body.classList.remove('sec-tests-overlay-open'); }catch(e){}
+        try{
+          var hb = document.getElementById('homeBtn');
+          if(hb && hb.__secTestsCloseCapture){
+            hb.removeEventListener('click', hb.__secTestsCloseCapture, true);
+            hb.__secTestsCloseCapture = null;
+          }
+        }catch(e){}
+      }
+      if(el && el.id === 'secShopOverlay'){
+        try{ document.body.classList.remove('sec-shop-overlay-open'); }catch(e){}
+        try{
+          var hb2 = document.getElementById('homeBtn');
+          if(hb2 && hb2.__secSecShopCloseCapture){
+            hb2.removeEventListener('click', hb2.__secSecShopCloseCapture, true);
+            hb2.__secSecShopCloseCapture = null;
+          }
+          // If no page/popup remains open, hide the Home button again
+          try{
+            var anyOverlay = false;
+            try{ anyOverlay = !!document.querySelector('.overlay.show'); }catch(_e){ anyOverlay = false; }
+            var anyPage = false;
+            try{ anyPage = document.body && document.body.classList && document.body.classList.contains('page-open'); }catch(_e){ anyPage = false; }
+            if(!anyOverlay && !anyPage){
+              try{ if(typeof hideHomeButton==='function') hideHomeButton(); }catch(_e){}
+            }
+          }catch(_e){}
+
+        }catch(e){}
+      }
+    }catch(e){}
     el.classList.remove("show");
     try{ resetPopupItems(el); }catch(e){}
     // remove popup-open if nothing else is open
@@ -470,6 +546,76 @@ function closeOverlay(el){
     try{ syncShopOnState(); }catch(e){}
   }catch(e){}
 }
+
+window.applySecTestOrdersTheme = function(){
+  try{
+    var ov = document.getElementById('secTestOrdersOverlay');
+    if(!ov) return;
+    var modal = document.getElementById('secTestsRootModal') || ov.querySelector('.pay-modal');
+    if(!modal) return;
+
+    var isDay = false;
+    try{ isDay = document.body && document.body.classList && document.body.classList.contains('theme-day'); }catch(e){ isDay = false; }
+
+    // Day palette fix: the Test Orders UI was created with night inline colors.
+    if(!isDay) return;
+
+    try{
+      var b1 = document.getElementById('secTestsCurrentBtn');
+      var b2 = document.getElementById('secTestsFutureBtn');
+      var p1 = document.getElementById('secTestsCurrentPanel');
+      var current = true;
+      try{ current = !(p1 && p1.style && p1.style.display === 'none'); }catch(e){ current = true; }
+
+      function styleTab(btn, active){
+        if(!btn) return;
+        btn.style.color = '#0f1414';
+        btn.style.border = '2px solid ' + (active ? 'rgba(18,110,70,.65)' : 'rgba(0,0,0,.26)');
+        btn.style.background = active ? 'rgba(25,150,90,.18)' : 'rgba(0,0,0,.04)';
+        btn.style.fontSize = '18px';
+        btn.style.fontWeight = '900';
+        btn.style.letterSpacing = '0.2px';
+        btn.style.boxShadow = active ? '0 6px 16px rgba(0,0,0,.10)' : '0 4px 12px rgba(0,0,0,.06)';
+      }
+      styleTab(b1, current);
+      styleTab(b2, !current);
+    }catch(e){}
+
+    var nodes = modal.querySelectorAll('*');
+    nodes.forEach(function(el){
+      try{
+        var c = (el.style && el.style.color) ? String(el.style.color).trim().toLowerCase() : '';
+        if(c){
+          if(c === '#fff' || c === '#ffffff' || c.indexOf('rgb(255') === 0 || c.indexOf('rgba(255') === 0){
+            el.style.color = '#0f1414';
+          }else if(c === '#d9d9d9' || c === '#b9c7bf' || c === '#b8c7bf' || c === '#cfd6d2' || c === '#d6e0db' || c === '#a9b7af' || c === '#9aa9a1'){
+            // In day mode, light gray text becomes unreadable on light backgrounds.
+            // Use solid dark text for maximum contrast (weekday labels + hints under buttons).
+            el.style.color = '#0f1414';
+          }
+        }
+        var bg = (el.style && el.style.background) ? String(el.style.background).trim().toLowerCase() : '';
+        if(bg){
+          if(bg.indexOf('rgba(255,255,255') === 0){
+            el.style.background = 'rgba(0,0,0,.04)';
+          }else if(bg.indexOf('rgba(25,110,65') === 0){
+            el.style.background = 'rgba(25,150,90,.18)';
+          }else if(bg.indexOf('rgba(255,255,255,.03') === 0){
+            el.style.background = 'rgba(0,0,0,.04)';
+          }
+        }
+        var bd = (el.style && el.style.border) ? String(el.style.border).trim().toLowerCase() : '';
+        if(bd){
+          if(bd.indexOf('rgba(255,255,255') !== -1){
+            el.style.border = '2px solid rgba(0,0,0,.18)';
+          }else if(bd.indexOf('rgba(80,255,160') !== -1){
+            el.style.border = '2px solid rgba(18,110,70,.60)';
+          }
+        }
+      }catch(e){}
+    });
+  }catch(e){}
+};
 
 function __uiSafetyReset(){
   try{
@@ -605,6 +751,155 @@ function resetPopupItems(overlay){
 }
 
 var PAGE_STACK = [];
+
+// ===== Horizontal scroll lock (fix: timer page drifting sideways) =====
+var __HLOCK_ACTIVE = false;
+var __HLOCK_HANDLER = null;
+
+function __lockHorizontalScroll(){
+  if(__HLOCK_ACTIVE) return;
+  __HLOCK_ACTIVE = true;
+
+  try{ document.documentElement.scrollLeft = 0; }catch(e){}
+  try{ document.body.scrollLeft = 0; }catch(e){}
+
+  __HLOCK_HANDLER = function(){
+    try{
+      var x = (window.pageXOffset || document.documentElement.scrollLeft || document.body.scrollLeft || 0);
+      if(x !== 0){
+        window.scrollTo(0, window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0);
+      }
+    }catch(e){}
+  };
+
+  try{ window.addEventListener('scroll', __HLOCK_HANDLER, {passive:true}); }catch(e){ try{ window.addEventListener('scroll', __HLOCK_HANDLER); }catch(e2){} }
+}
+
+function __unlockHorizontalScroll(){
+  if(!__HLOCK_ACTIVE) return;
+  __HLOCK_ACTIVE = false;
+  try{ if(__HLOCK_HANDLER) window.removeEventListener('scroll', __HLOCK_HANDLER); }catch(e){}
+  __HLOCK_HANDLER = null;
+  try{ document.documentElement.scrollLeft = 0; }catch(e){}
+  try{ document.body.scrollLeft = 0; }catch(e){}
+}
+
+// ===== Timer viewport freeze (hard fix for sideways drifting) =====
+var __TIMER_FREEZE_ACTIVE = false;
+var __TIMER_FREEZE_Y = 0;
+var __TIMER_FREEZE_X = 0;
+
+function __freezeViewportForTimer(){
+  if(__TIMER_FREEZE_ACTIVE) return;
+  __TIMER_FREEZE_ACTIVE = true;
+
+  try{
+    __TIMER_FREEZE_Y = window.pageYOffset || document.documentElement.scrollTop || document.body.scrollTop || 0;
+    __TIMER_FREEZE_X = window.pageXOffset || document.documentElement.scrollLeft || document.body.scrollLeft || 0;
+
+    document.documentElement.classList.add('timer-freeze');
+    document.body.classList.add('timer-freeze');
+
+    // freeze the viewport (prevents any horizontal pan on mobile)
+    document.body.style.position = 'fixed';
+    document.body.style.top = (-__TIMER_FREEZE_Y) + 'px';
+    document.body.style.left = '0px';
+    document.body.style.right = '0px';
+    document.body.style.width = '100%';
+
+    // also reset any stray X scroll immediately
+    try{ window.scrollTo(0, __TIMER_FREEZE_Y); }catch(e2){}
+  }catch(e){}
+}
+
+function __unfreezeViewportForTimer(){
+  if(!__TIMER_FREEZE_ACTIVE) return;
+  __TIMER_FREEZE_ACTIVE = false;
+
+  try{
+    document.documentElement.classList.remove('timer-freeze');
+    document.body.classList.remove('timer-freeze');
+
+    document.body.style.position = '';
+    document.body.style.top = '';
+    document.body.style.left = '';
+    document.body.style.right = '';
+    document.body.style.width = '';
+
+    // restore scroll (should be 0 while timer open, but keep safe)
+    window.scrollTo(__TIMER_FREEZE_X || 0, __TIMER_FREEZE_Y || 0);
+  }catch(e){}
+}
+
+
+/* ===== Timer horizontal pan guard (fix: timer page drifting sideways) ===== */
+var __TIMER_PAN_GUARD_ON = false;
+var __TPG_startX = 0, __TPG_startY = 0, __TPG_tracking = false;
+
+function __enableTimerPanGuard(){
+  if(__TIMER_PAN_GUARD_ON) return;
+  __TIMER_PAN_GUARD_ON = true;
+
+  var page = document.getElementById('timerPage');
+  if(!page) return;
+
+  var target = page.querySelector('.page-inner') || page;
+
+  function onStart(e){
+    try{
+      __TPG_tracking = true;
+      var t = (e.touches && e.touches[0]) ? e.touches[0] : e;
+      __TPG_startX = t.clientX;
+      __TPG_startY = t.clientY;
+    }catch(err){}
+  }
+  function onMove(e){
+    if(!__TIMER_PAN_GUARD_ON || !__TPG_tracking) return;
+    try{
+      var t = (e.touches && e.touches[0]) ? e.touches[0] : e;
+      var dx = t.clientX - __TPG_startX;
+      var dy = t.clientY - __TPG_startY;
+
+      // If horizontal intent is detected, block it completely.
+      if(Math.abs(dx) > 6 && Math.abs(dx) > Math.abs(dy)){
+        if(e.cancelable) e.preventDefault();
+        // Reset any accidental horizontal scroll (RTL/LTR safe)
+        try{ target.scrollLeft = 0; }catch(err2){}
+        try{ window.scrollTo(0, window.pageYOffset || document.documentElement.scrollTop || 0); }catch(err3){}
+      }
+    }catch(err){}
+  }
+  function onEnd(){
+    __TPG_tracking = false;
+  }
+
+  // store handlers on target for removal
+  target.__tpg_onStart = onStart;
+  target.__tpg_onMove = onMove;
+  target.__tpg_onEnd = onEnd;
+
+  try{ target.addEventListener('touchstart', onStart, {passive:true}); }catch(e){ try{ target.addEventListener('touchstart', onStart); }catch(e2){} }
+  try{ target.addEventListener('touchmove', onMove, {passive:false}); }catch(e){ try{ target.addEventListener('touchmove', onMove); }catch(e2){} }
+  try{ target.addEventListener('touchend', onEnd, {passive:true}); }catch(e){ try{ target.addEventListener('touchend', onEnd); }catch(e2){} }
+  try{ target.addEventListener('touchcancel', onEnd, {passive:true}); }catch(e){ try{ target.addEventListener('touchcancel', onEnd); }catch(e2){} }
+}
+
+function __disableTimerPanGuard(){
+  if(!__TIMER_PAN_GUARD_ON) return;
+  __TIMER_PAN_GUARD_ON = false;
+  __TPG_tracking = false;
+
+  var page = document.getElementById('timerPage');
+  if(!page) return;
+  var target = page.querySelector('.page-inner') || page;
+
+  try{ if(target.__tpg_onStart) target.removeEventListener('touchstart', target.__tpg_onStart); }catch(e){}
+  try{ if(target.__tpg_onMove) target.removeEventListener('touchmove', target.__tpg_onMove); }catch(e){}
+  try{ if(target.__tpg_onEnd) target.removeEventListener('touchend', target.__tpg_onEnd); }catch(e){}
+  try{ if(target.__tpg_onEnd) target.removeEventListener('touchcancel', target.__tpg_onEnd); }catch(e){}
+
+  try{ delete target.__tpg_onStart; delete target.__tpg_onMove; delete target.__tpg_onEnd; }catch(e){}
+}
 function __blurActiveInputs(){
   try{
     var ae = document.activeElement;
@@ -791,6 +1086,8 @@ function openPage(pageId, pushToStack){
 
   // אם התפריט פתוח – סוגרים אותו, אבל לא סוגרים את הסאב-פייג'ים בפתיחת התפריט.
   closeMenu();
+  // Also close left (student) menu if open
+  try{ if(document.body.classList.contains('student-menu-open')) closeProfileMenu(); }catch(e){} 
   closePopup(true);
   try{ __blurActiveInputs(); }catch(e){}
 
@@ -831,7 +1128,28 @@ function openPage(pageId, pushToStack){
   }catch(e){}
 
   page.classList.add('show');
+  try{ if(pageId === 'timerPage'){ __lockHorizontalScroll(); __enableTimerPanGuard(); __freezeViewportForTimer(); } else { __unlockHorizontalScroll(); __disableTimerPanGuard(); __unfreezeViewportForTimer(); } }catch(e){}
   try{ ensureCloseSliderOnPage(page); }catch(e){}
+  // Always reset scroll position to the top when opening a sub-page.
+  // Note: after ensureCloseSliderOnPage, the real scroller becomes .page-content-scroll (not .page-inner).
+  try{
+    var inner = page.querySelector('.page-inner');
+    var scroller = page.querySelector('.page-content-scroll') || (inner ? inner.querySelector('.page-content-scroll') : null);
+
+    function resetScroll(el){
+      if(!el) return;
+      try{ el.scrollTop = 0; }catch(e){}
+      try{ if(el.scrollTo) el.scrollTo(0,0); }catch(e){}
+    }
+
+    // immediate
+    resetScroll(scroller);
+    resetScroll(inner);
+
+    // next frames (after DOM reflow / content moved into scroller)
+    requestAnimationFrame(function(){ resetScroll(scroller || page.querySelector('.page-content-scroll')); resetScroll(inner); });
+    setTimeout(function(){ resetScroll(scroller || page.querySelector('.page-content-scroll')); resetScroll(inner); }, 0);
+  }catch(e){}
   
   try{ if(page && page.id==="studentProfilePage") cleanupStudentProfileStrayFooterNumber(); }catch(e){}
 document.body.classList.add('page-open');
@@ -846,8 +1164,9 @@ try{ updateEdgeHandles(); }catch(e){}
 
   // Ensure the inner scroll starts at the top (prevents clipped header on open)
   try{
+    // Legacy fallback (kept for safety): if no grip scroller exists, reset .page-inner.
     var inner = page.querySelector('.page-inner');
-    if(inner){
+    if(inner && !page.querySelector('.page-content-scroll')){
       try{ inner.scrollTop = 0; }catch(e){}
       try{ if(inner.scrollTo) inner.scrollTo(0,0); }catch(e){}
       requestAnimationFrame(function(){
@@ -916,6 +1235,9 @@ function closeAllPages(hideBtn){
     pages[i].classList.remove('show');
   }
   document.body.classList.remove('page-open');
+  try{ __unlockHorizontalScroll(); }catch(e){}
+  try{ __disableTimerPanGuard(); }catch(e){}
+  try{ __unfreezeViewportForTimer(); }catch(e){}
   document.body.classList.remove('reveal-home');
   document.body.classList.remove('shop-on');
   try{
@@ -3574,8 +3896,12 @@ function backToMainMenu(){
       var idSafe = String(m.id || "").replace(/\\/g,"\\\\").replace(/'/g,"\\'");
 
       html += '<button class="pm-row ' + (unread ? 'unread' : '') + '" type="button" onclick="pmOpenMessage(\'' + idSafe + '\')">';
-      html += '  <div class="pm-row-title"><span class="pm-dot" aria-hidden="true"></span><span>' + title + '</span></div>';
+      html += '  <div class="pm-row-title">'
+           + '    <span class="pm-dot" aria-hidden="true"></span>'
+           + '    <span>' + title + '</span>'
+           + '  </div>';
       html += '  <div class="pm-row-date">' + t + ' ' + d + '</div>';
+      html += '  <div class="pm-read-under" aria-hidden="true">נקרא</div>';
       html += '</button>';
     }
     list.innerHTML = html;
@@ -4866,7 +5192,9 @@ try{ closeProfileMenu(); }catch(e){}
     if(state.loggedIn){
       state.postAuthPage = null;
       closeStartOverlay();
-      try{ openPage("licenseRequestPage"); }catch(e){}
+      try{ openPage("licenseRequestPage");
+    try{ initDobPicker(); }catch(e){}
+    try{ if(window.__resetDobPicker) window.__resetDobPicker(); }catch(e){} }catch(e){}
       return;
     }
 
@@ -4887,6 +5215,8 @@ try{ closeProfileMenu(); }catch(e){}
     try{ closeProfileMenu(); }catch(e){}
     try{ if(typeof window.closeMenu === 'function') window.closeMenu(); }catch(e){}
     openPage("licenseRequestPage");
+    try{ initDobPicker(); }catch(e){}
+    try{ if(window.__resetDobPicker) window.__resetDobPicker(); }catch(e){}
   try{ if(typeof window.__licenseFlowRefresh==="function") window.__licenseFlowRefresh(); }catch(e){}
   }
 
@@ -5556,6 +5886,83 @@ function financeGetStudentBalanceByTz(tz, username){
     return { ok:true, tz:tz, units:units, amount:chargeAmount, balance:dueNow, payObj:payObj };
   }
 
+  // Charge for "הזמנת טסט" (400₪) as a ledger transaction.
+  // MUST be persisted in the same ledger as payments/lessons so later payments won't "refund" it.
+  function financeChargeTestOrderByTz(tz, price, meta){
+    tz = String(tz||'').trim();
+    var amt = Number(price);
+    if(!tz) return { ok:false, reason:'missing_tz' };
+    if(!isFinite(amt) || amt <= 0) amt = 400;
+
+    var m = (meta && typeof meta === 'object') ? meta : {};
+    var txId = String(m.txId || m.id || '') || (typeof makeTxId === 'function' ? makeTxId() : ('tx_' + Date.now() + '_' + Math.random().toString(16).slice(2)));
+    var note = String(m.note || 'הזמנת טסט');
+
+    // Load + ensure ledger
+    var keyP = payKeyStudent(tz);
+    var payObj = payLsGet(keyP, {}) || {};
+    if(!payObj || typeof payObj !== 'object') payObj = {};
+    try{ payEnsureLedger(payObj, tz); }catch(e){}
+
+    // Idempotency: if already charged with same txId, return current balance.
+    try{
+      if(Array.isArray(payObj.ledger)){
+        for(var i=0;i<payObj.ledger.length;i++){
+          var e0 = payObj.ledger[i];
+          if(!e0 || typeof e0 !== 'object') continue;
+          if(String(e0.id||'') === txId) {
+            var due0 = Number(payObj.due);
+            if(!isFinite(due0)) due0 = Number(payLedgerSum(payObj));
+            if(!isFinite(due0)) due0 = 0;
+            return { ok:true, tz:tz, amount:-Math.abs(amt), balance:due0, txId:txId, payObj:payObj, already:true };
+          }
+        }
+      }
+    }catch(e){}
+
+    // Check current balance from ledger
+    var cur = Number(payObj.due);
+    if(!isFinite(cur)) cur = Number(payLedgerSum(payObj));
+    if(!isFinite(cur)) cur = 0;
+    if(cur < amt) return { ok:false, reason:'insufficient', balance:cur, price:amt, txId:txId };
+
+    // Add ledger entry
+    try{
+      payLedgerAdd(payObj, {
+        u: tz,
+        ts: Date.now(),
+        id: txId,
+        type: 'test_order',
+        amount: -Math.abs(amt),
+        note: note,
+        source: String(m.source || 'student_book_test'),
+        meta: (m.meta && typeof m.meta === 'object') ? m.meta : { txId: txId }
+      });
+    }catch(e){
+      return { ok:false, reason:'ledger_add_failed', error:e, txId:txId };
+    }
+
+    var dueNow = Number(payObj.due);
+    if(!isFinite(dueNow)) dueNow = Number(payLedgerSum(payObj));
+    if(!isFinite(dueNow)) dueNow = 0;
+    payObj.due = dueNow;
+
+    // Persist
+    try{ payLsSet(keyP, payObj); }catch(e){ return { ok:false, reason:'persist_failed', error:e, txId:txId }; }
+    try{ DBStorage.setItem(keyStudentCredit(tz), String(Math.round(dueNow))); }catch(e){}
+    try{
+      var prof = payLsGet(payKeyProfile(tz), {}) || {};
+      if(typeof prof !== 'object') prof = {};
+      prof.paymentsDue = dueNow;
+      payLsSet(payKeyProfile(tz), prof);
+    }catch(e){}
+
+    return { ok:true, tz:tz, amount:-Math.abs(amt), balance:dueNow, txId:txId, payObj:payObj };
+  }
+
+  // export for UI flows
+  try{ window.financeChargeTestOrderByTz = financeChargeTestOrderByTz; }catch(e){}
+
   function financeCleanupLegacyStorage(){
     var report = { scanned: 0, migrated: 0, removed: 0, skipped: 0, errors: 0 };
     var seen = {};
@@ -5848,32 +6255,131 @@ function financeGetStudentBalanceByTz(tz, username){
     
     function readDobISO(){
       try{
-        var d = ($("schoolRegDobDay")||{}).value || "";
-        var m = ($("schoolRegDobMonth")||{}).value || "";
-        var y = ($("schoolRegDobYear")||{}).value || "";
-        d = String(d).replace(/\D/g,"");
-        m = String(m).replace(/\D/g,"");
-        y = String(y).replace(/\D/g,"");
-        if(!d || !m || !y) return "";
-        if(y.length !== 4) return "";
-        if(d.length === 1) d = "0"+d;
-        if(m.length === 1) m = "0"+m;
-        if(d.length !== 2 || m.length !== 2) return "";
-        var di = parseInt(d,10), mi = parseInt(m,10), yi = parseInt(y,10);
-        if(!(yi>=1900 && yi<=2100)) return "";
-        if(!(mi>=1 && mi<=12)) return "";
-        if(!(di>=1 && di<=31)) return "";
-        return y+"-"+m+"-"+d;
+        var iso = ($("schoolRegDobISO")||{}).value || "";
+        iso = String(iso).trim();
+        // Expect YYYY-MM-DD
+        if(!/^\d{4}-\d{2}-\d{2}$/.test(iso)) return "";
+        return iso;
       }catch(e){ return ""; }
     }
-    function fillDobFromISO(iso){
+
+    function initDobPicker(){
       try{
-        if(!iso) return;
-        var m = String(iso).match(/(\d{4})-(\d{2})-(\d{2})/);
-        if(!m) return;
-        if($("schoolRegDobYear")) $("schoolRegDobYear").value = m[1];
-        if($("schoolRegDobMonth")) $("schoolRegDobMonth").value = m[2];
-        if($("schoolRegDobDay")) $("schoolRegDobDay").value = m[3];
+        var bar = $("schoolRegDobBar");
+        var panel = $("schoolRegDobPanel");
+        if(!bar || !panel) return;
+
+        if(bar.__dobInit) return;
+        bar.__dobInit = true;
+
+        var dayLbl = $("schoolRegDobDayLbl");
+        var monthLbl = $("schoolRegDobMonthLbl");
+        var yearLbl = $("schoolRegDobYearLbl");
+        var isoEl = $("schoolRegDobISO");
+
+        function setIsoFromParts(){
+          var d = (dayLbl && dayLbl.getAttribute("data-val")) || "";
+          var m = (monthLbl && monthLbl.getAttribute("data-val")) || "";
+          var y = (yearLbl && yearLbl.getAttribute("data-val")) || "";
+          if(!d || !m || !y){
+            if(isoEl) isoEl.value = "";
+            return;
+          }
+          if(String(d).length===1) d="0"+d;
+          if(String(m).length===1) m="0"+m;
+          if(isoEl) isoEl.value = y+"-"+m+"-"+d;
+        }
+
+        function setSelected(part, val){
+          val = String(val);
+          var targetLbl = part==="day" ? dayLbl : part==="month" ? monthLbl : yearLbl;
+          if(!targetLbl) return;
+          targetLbl.textContent = (part==="day"||part==="month") ? val : val;
+          targetLbl.setAttribute("data-val", val);
+          setIsoFromParts();
+        }
+
+        function openPanel(){
+          panel.classList.remove("hidden");
+          bar.setAttribute("aria-expanded","true");
+        }
+        function closePanel(){
+          panel.classList.add("hidden");
+          bar.setAttribute("aria-expanded","false");
+        }
+        function togglePanel(){
+          if(panel.classList.contains("hidden")) openPanel(); else closePanel();
+        }
+
+        // Build lists
+        function buildList(listEl, part, from, to, step){
+          if(!listEl) return;
+          var html = "";
+          for(var v=from; step>0 ? v<=to : v>=to; v+=step){
+            html += '<button type="button" class="dob-item" data-part="'+part+'" data-val="'+v+'">'+v+'</button>';
+          }
+          listEl.innerHTML = html;
+        }
+
+        buildList($("dobDayList"), "day", 1, 31, 1);
+        buildList($("dobMonthList"), "month", 1, 12, 1);
+        var nowY = (new Date()).getFullYear();
+        buildList($("dobYearList"), "year", nowY, 1900, -1);
+
+        function syncSelectedClasses(){
+          var d = (dayLbl && dayLbl.getAttribute("data-val")) || "";
+          var m = (monthLbl && monthLbl.getAttribute("data-val")) || "";
+          var y = (yearLbl && yearLbl.getAttribute("data-val")) || "";
+          panel.querySelectorAll(".dob-item").forEach(function(btn){
+            var p = btn.getAttribute("data-part");
+            var v = btn.getAttribute("data-val");
+            var sel = (p==="day" && v===d) || (p==="month" && v===m) || (p==="year" && v===y);
+            btn.classList.toggle("selected", !!sel);
+          });
+        }
+
+        panel.addEventListener("click", function(e){
+          var t = e.target;
+          if(!t || !t.classList || !t.classList.contains("dob-item")) return;
+          e.preventDefault();
+          e.stopPropagation();
+          var part = t.getAttribute("data-part");
+          var val = t.getAttribute("data-val");
+          setSelected(part, val);
+          syncSelectedClasses();
+
+          // Close when all parts selected
+          var ok = (dayLbl && dayLbl.getAttribute("data-val")) &&
+                   (monthLbl && monthLbl.getAttribute("data-val")) &&
+                   (yearLbl && yearLbl.getAttribute("data-val"));
+          if(ok) closePanel();
+        });
+
+        bar.addEventListener("click", function(e){
+          e.preventDefault();
+          e.stopPropagation();
+          syncSelectedClasses();
+          togglePanel();
+        });
+
+        // Close when clicking outside
+        document.addEventListener("click", function(e){
+          if(panel.classList.contains("hidden")) return;
+          var inside = panel.contains(e.target) || bar.contains(e.target);
+          if(!inside) closePanel();
+        }, true);
+
+        // Expose a reset helper used by registration resets
+        window.__resetDobPicker = function(){
+          try{
+            if(dayLbl){ dayLbl.textContent="יום"; dayLbl.removeAttribute("data-val"); }
+            if(monthLbl){ monthLbl.textContent="חודש"; monthLbl.removeAttribute("data-val"); }
+            if(yearLbl){ yearLbl.textContent="שנה"; yearLbl.removeAttribute("data-val"); }
+            if(isoEl) isoEl.value="";
+            closePanel();
+          }catch(e){}
+        };
+
       }catch(e){}
     }
 
@@ -6468,6 +6974,40 @@ try{
 /* v6: Prefill receipt input from student profile (when available) */
 function payPrefillReceiptFromProfile(){
   try{
+    if(!window.PAY) window.PAY = {};
+
+    // Determine active user key for this payment context
+    var activeKey = "";
+    try{ activeKey = (PAY && PAY.paymentUserKey) ? String(PAY.paymentUserKey) : ""; }catch(e){}
+    activeKey = String(activeKey||"").trim();
+    if(!activeKey){
+      try{ if(typeof payGetUser === "function") activeKey = String(payGetUser()||"").trim(); }catch(e){}
+    }
+
+    // If active key changed since last time, reset per-user receipt state (avoid leaking between students)
+    try{
+      var prevKey = (PAY && PAY.receiptUserKey) ? String(PAY.receiptUserKey) : "";
+      prevKey = String(prevKey||"").trim();
+      if(activeKey && prevKey && activeKey !== prevKey){
+        // best-effort: persist current visible value into previous bucket before switching
+        try{
+          PAY.receiptContactsByUser = PAY.receiptContactsByUser || {};
+          var prevBucket = PAY.receiptContactsByUser[prevKey] || {};
+          var rPrev = null;
+          try{ rPrev = $("receiptInput"); }catch(e){}
+          var prevMode = (PAY && PAY.receiptMode) ? String(PAY.receiptMode) : "email";
+          var curVal = rPrev ? String(rPrev.value||"") : "";
+          if(prevMode === "phone") prevBucket.phoneValue = curVal;
+          else prevBucket.emailValue = curVal;
+          PAY.receiptContactsByUser[prevKey] = prevBucket;
+        }catch(e){}
+
+        try{ PAY.receiptEmailValue = ""; PAY.receiptPhoneValue = ""; }catch(e){}
+        try{ var rNow = $("receiptInput"); if(rNow) rNow.value = ""; }catch(e){}
+      }
+      if(activeKey) PAY.receiptUserKey = activeKey;
+    }catch(e){}
+
     // Candidate identifiers (student profile can be keyed by TZ or username)
     var cands = [];
     function pushCand(v){
@@ -6479,11 +7019,13 @@ function payPrefillReceiptFromProfile(){
       if(d && cands.indexOf(d)===-1) cands.push(d);
     }
 
-    try{ if(typeof payGetUser === "function") pushCand(payGetUser()); }catch(e){}
+    // Priority: activeKey (explicit), then active student TZ, then fallbacks
+    pushCand(activeKey);
     try{ pushCand(window.__activeStudentTz); }catch(e){}
     try{ pushCand(window.APP_STATE && window.APP_STATE.activeStudentTz); }catch(e){}
-    try{ pushCand(state && state.username); }catch(e){}
+    try{ if(typeof payGetUser === "function") pushCand(payGetUser()); }catch(e){}
     try{ pushCand(DBStorage.getItem("student_username")); }catch(e){}
+    try{ pushCand(state && state.username); }catch(e){}
 
     if(!cands.length) return;
 
@@ -6540,13 +7082,27 @@ function payPrefillReceiptFromProfile(){
     var phone = pick(p, ["phone","mobile","tel","phoneNumber","Phone","פלאפון","טלפון","נייד"]);
     try{ if(phone && typeof normalizePhone === "function") phone = normalizePhone(phone); }catch(e){}
     phone = String(phone||"").trim();
-    try{
-      if(!window.PAY) window.PAY = {};
-      // cache profile contacts for tab switching (do not override user-edited values)
-      if(email && (PAY.receiptEmailValue == null || String(PAY.receiptEmailValue).trim() === "")) PAY.receiptEmailValue = email;
-      if(phone && (PAY.receiptPhoneValue == null || String(PAY.receiptPhoneValue).trim() === "")) PAY.receiptPhoneValue = phone;
-    }catch(e){}
+    email = String(email||"").trim();
 
+    // Cache per-user to prevent cross-profile leakage
+    var cacheKey = String(activeKey||cands[0]||"__default__").trim() || "__default__";
+    try{
+      PAY.receiptContactsByUser = PAY.receiptContactsByUser || {};
+      var bucket = PAY.receiptContactsByUser[cacheKey] || {};
+      if(email) bucket.profileEmail = email;
+      if(phone) bucket.profilePhone = phone;
+
+      // set default values only if not already set by user for this student
+      if(email && (bucket.emailValue == null || String(bucket.emailValue).trim() === "")) bucket.emailValue = email;
+      if(phone && (bucket.phoneValue == null || String(bucket.phoneValue).trim() === "")) bucket.phoneValue = phone;
+
+      PAY.receiptContactsByUser[cacheKey] = bucket;
+
+      // mirror to legacy globals used by existing UI
+      PAY.receiptEmailValue = (bucket.emailValue != null) ? String(bucket.emailValue||"") : "";
+      PAY.receiptPhoneValue = (bucket.phoneValue != null) ? String(bucket.phoneValue||"") : "";
+      PAY.receiptUserKey = cacheKey;
+    }catch(e){}
 
     var r = null, emailBtn=null, phoneBtn=null;
     try{ r = $("receiptInput"); emailBtn = $("receiptEmailBtn"); phoneBtn = $("receiptPhoneBtn"); }catch(e){}
@@ -6583,21 +7139,28 @@ function payPrefillReceiptFromProfile(){
     if(cur) return;
 
     // Fill based on current mode; fallback to other if missing
+    var emailFill = "";
+    var phoneFill = "";
+    try{ emailFill = (PAY && PAY.receiptEmailValue != null) ? String(PAY.receiptEmailValue||"").trim() : ""; }catch(e){ emailFill=""; }
+    try{ phoneFill = (PAY && PAY.receiptPhoneValue != null) ? String(PAY.receiptPhoneValue||"").trim() : ""; }catch(e){ phoneFill=""; }
+    if(!emailFill) emailFill = email;
+    if(!phoneFill) phoneFill = phone;
+
     if(mode === "phone"){
-      if(phone){
+      if(phoneFill){
         applyMode("phone");
-        r.value = phone;
-      }else if(email){
+        r.value = phoneFill;
+      }else if(emailFill){
         applyMode("email");
-        r.value = email;
+        r.value = emailFill;
       }
     }else{
-      if(email){
+      if(emailFill){
         applyMode("email");
-        r.value = email;
-      }else if(phone){
+        r.value = emailFill;
+      }else if(phoneFill){
         applyMode("phone");
-        r.value = phone;
+        r.value = phoneFill;
       }
     }
   }catch(e){}
@@ -6607,6 +7170,32 @@ function openPaymentModal(presetAmount, presetNote, forceUser){
     try{
       if(!forceUser && typeof window !== 'undefined' && window.__PAY_BOOT_BLOCK) return;
     }catch(e){}
+    // v9: force payment context to the student we opened from (prevents receipt details leaking between profiles)
+    try{
+      var fk = String(forceUser||"").trim();
+      if(fk){
+        if(!window.PAY) window.PAY = {};
+        // set active student TZ so payGetUser / prefill use the correct profile
+        try{ window.__activeStudentTz = fk; }catch(e){}
+        try{ if(window.APP_STATE) window.APP_STATE.activeStudentTz = fk; }catch(e){}
+        // reset receipt input/cache for the new student context
+        try{
+          if(String(PAY.paymentUserKey||"").trim() !== fk){
+            PAY.paymentUserKey = fk;
+            PAY.receiptUserKey = fk;
+            PAY.receiptEmailValue = "";
+            PAY.receiptPhoneValue = "";
+            try{ var rr = $("receiptInput"); if(rr) rr.value = ""; }catch(e){}
+          }else{
+            PAY.paymentUserKey = fk;
+            PAY.receiptUserKey = fk;
+          }
+        }catch(e){}
+      }else{
+        try{ if(window.PAY) PAY.paymentUserKey = ""; }catch(e){}
+      }
+    }catch(e){}
+
     try{ closeProfileMenu(); }catch(e){}
     try{ if(typeof window.closeMenu === 'function') window.closeMenu(); }catch(e){}
     document.body.classList.add("pay-open");
@@ -7344,28 +7933,54 @@ var __skipDockFocus = false;
         }catch(e){}
         try{
           if(r){
-            // preserve values per mode (do not wipe when switching)
+            // preserve values per mode (per-student; prevents leaking between profiles)
+            var __rk = "__default__";
+            var __bucket = null;
             try{
               if(!window.PAY) window.PAY = {};
+              __rk = (PAY && PAY.receiptUserKey) ? String(PAY.receiptUserKey) : "";
+              __rk = String(__rk||"").trim();
+              if(!__rk && typeof payGetUser === "function") __rk = String(payGetUser()||"").trim();
+              if(!__rk) __rk = "__default__";
+
+              PAY.receiptContactsByUser = PAY.receiptContactsByUser || {};
+              __bucket = PAY.receiptContactsByUser[__rk] || {};
+
               var prevMode = (PAY && PAY.__prevReceiptMode) ? String(PAY.__prevReceiptMode) : "email";
               var curVal = String(r.value||"");
-              if(prevMode === "phone") PAY.receiptPhoneValue = curVal;
-              else PAY.receiptEmailValue = curVal;
-            }catch(_e){}
+              if(prevMode === "phone") __bucket.phoneValue = curVal;
+              else __bucket.emailValue = curVal;
+
+              PAY.receiptContactsByUser[__rk] = __bucket;
+
+              // mirror to legacy globals used elsewhere
+              PAY.receiptEmailValue = (__bucket.emailValue != null) ? String(__bucket.emailValue||"") : "";
+              PAY.receiptPhoneValue = (__bucket.phoneValue != null) ? String(__bucket.phoneValue||"") : "";
+            }catch(_e){ __bucket = null; }
 
             if(mode==="phone"){
               r.placeholder = "הכנס מספר פלאפון";
               r.type = "tel";
               r.setAttribute("inputmode","tel");
-              try{ if(PAY && PAY.receiptPhoneValue != null) r.value = String(PAY.receiptPhoneValue||""); }catch(_e){}
+              try{
+                var pv = "";
+                if(__bucket && __bucket.phoneValue != null) pv = String(__bucket.phoneValue||"");
+                else if(PAY && PAY.receiptPhoneValue != null) pv = String(PAY.receiptPhoneValue||"");
+                r.value = pv;
+              }catch(_e){}
             }else{
               r.placeholder = "הכנס דואר אלקטרוני";
               r.type = "email";
               r.setAttribute("inputmode","email");
-              try{ if(PAY && PAY.receiptEmailValue != null) r.value = String(PAY.receiptEmailValue||""); }catch(_e){}
+              try{
+                var ev = "";
+                if(__bucket && __bucket.emailValue != null) ev = String(__bucket.emailValue||"");
+                else if(PAY && PAY.receiptEmailValue != null) ev = String(PAY.receiptEmailValue||"");
+                r.value = ev;
+              }catch(_e){}
             }
 
-            // if still empty, try prefill from active student profile without overwriting other mode
+// if still empty, try prefill from active student profile without overwriting other mode
             try{
               var vnow = String(r.value||"").trim();
               if(!vnow && typeof payPrefillReceiptFromProfile === "function"){
@@ -7415,7 +8030,9 @@ var __skipDockFocus = false;
         setTimeout(function(){
           try{
             if(!document.body.classList.contains("auth-open")){
-              try{ openPage("licenseRequestPage"); }catch(e){}
+              try{ openPage("licenseRequestPage");
+    try{ initDobPicker(); }catch(e){}
+    try{ if(window.__resetDobPicker) window.__resetDobPicker(); }catch(e){} }catch(e){}
               openPaymentModal("", "תשלום על שיעור", true);
               try{ window.__afterLoginOpenPayLesson = false; }catch(e){}
             }
@@ -7780,7 +8397,14 @@ function openSignupPage(){
     closeMenu();
     closePopup(true);
   }catch(e){}
-  openPage("signupPage", true);
+  // Signup is a floating modal overlay (not a subpage)
+  try{
+    var sp = document.getElementById("signupPage");
+    if(sp){
+      sp.classList.add("show");
+      sp.setAttribute("aria-hidden","false");
+    }
+  }catch(e){}
   // reset UI
   try{
     var form = document.getElementById("su_signupForm");
@@ -7795,16 +8419,150 @@ var sw = document.getElementById("su_successWrap");
     // clear invalid
     var fields = document.querySelectorAll("#signupPage .su-field.invalid");
     for(var i=0;i<fields.length;i++) fields[i].classList.remove("invalid");
-    // scroll to top of page-inner
-    var inner = document.querySelector("#signupPage .page-inner");
-    if(inner) inner.scrollTop = 0;
+    // scroll to top of overlay
+    var sc = document.querySelector("#signupPage .su-overlayScroll");
+    if(sc) sc.scrollTop = 0;
   }catch(e){}
+  try{ initSuDobPicker(); }catch(e){}
+  try{ if(window.__resetSuDobPicker) window.__resetSuDobPicker(); }catch(e){}
 }
 
 function closeSignupPage(){
-  // go back like other pages
-  try{ goBackStep(); }catch(e){ try{ closeAllPages(true); }catch(err){} }
+  try{
+    var sp = document.getElementById("signupPage");
+    if(sp){
+      sp.classList.remove("show");
+      sp.setAttribute("aria-hidden","true");
+    }
+  }catch(e){}
 }
+
+
+// --- Simple DOB picker for signup (day/month/year) ---
+function initSuDobPicker(){
+  try{
+    var bar   = document.getElementById("suDobBar");
+    var panel = document.getElementById("suDobPanel");
+    var isoEl = document.getElementById("su_dob"); // hidden input (YYYY-MM-DD)
+    if(!bar || !panel || !isoEl) return;
+
+    if(bar.__dobInit) return;
+    bar.__dobInit = true;
+
+    var dayLbl   = document.getElementById("suDobDayLbl");
+    var monthLbl = document.getElementById("suDobMonthLbl");
+    var yearLbl  = document.getElementById("suDobYearLbl");
+
+    function setIsoFromParts(){
+      var d = (dayLbl && dayLbl.getAttribute("data-val")) || "";
+      var m = (monthLbl && monthLbl.getAttribute("data-val")) || "";
+      var y = (yearLbl && yearLbl.getAttribute("data-val")) || "";
+      if(!d || !m || !y){ isoEl.value = ""; return; }
+      if(String(d).length===1) d="0"+d;
+      if(String(m).length===1) m="0"+m;
+      isoEl.value = y+"-"+m+"-"+d;
+    }
+
+    function setSelected(part, val){
+      val = String(val);
+      var targetLbl = part==="day" ? dayLbl : part==="month" ? monthLbl : yearLbl;
+      if(!targetLbl) return;
+      targetLbl.textContent = val;
+      targetLbl.setAttribute("data-val", val);
+      setIsoFromParts();
+    }
+
+    function openPanel(){
+      panel.classList.remove("hidden");
+      bar.setAttribute("aria-expanded","true");
+    }
+    function closePanel(){
+      panel.classList.add("hidden");
+      bar.setAttribute("aria-expanded","false");
+    }
+    function togglePanel(){
+      if(panel.classList.contains("hidden")) openPanel(); else closePanel();
+    }
+
+    function buildList(listEl, part, from, to, step){
+      if(!listEl) return;
+      var html = "";
+      for(var v=from; step>0 ? v<=to : v>=to; v+=step){
+        html += '<button type="button" class="dob-item" data-part="'+part+'" data-val="'+v+'">'+v+'</button>';
+      }
+      listEl.innerHTML = html;
+    }
+
+    buildList(document.getElementById("suDobDayList"), "day", 1, 31, 1);
+    buildList(document.getElementById("suDobMonthList"), "month", 1, 12, 1);
+    var nowY = (new Date()).getFullYear();
+    buildList(document.getElementById("suDobYearList"), "year", nowY, 1900, -1);
+
+    function syncSelectedClasses(){
+      var d = (dayLbl && dayLbl.getAttribute("data-val")) || "";
+      var m = (monthLbl && monthLbl.getAttribute("data-val")) || "";
+      var y = (yearLbl && yearLbl.getAttribute("data-val")) || "";
+      panel.querySelectorAll(".dob-item").forEach(function(btn){
+        var p = btn.getAttribute("data-part");
+        var v = btn.getAttribute("data-val");
+        var sel = (p==="day" && v===d) || (p==="month" && v===m) || (p==="year" && v===y);
+        btn.classList.toggle("selected", !!sel);
+      });
+    }
+
+    panel.addEventListener("click", function(e){
+      var t = e.target;
+      if(!t || !t.classList || !t.classList.contains("dob-item")) return;
+      e.preventDefault();
+      e.stopPropagation();
+      var part = t.getAttribute("data-part");
+      var val  = t.getAttribute("data-val");
+      setSelected(part, val);
+      syncSelectedClasses();
+
+      var ok = (dayLbl && dayLbl.getAttribute("data-val")) &&
+               (monthLbl && monthLbl.getAttribute("data-val")) &&
+               (yearLbl && yearLbl.getAttribute("data-val"));
+      if(ok) closePanel();
+    });
+
+    bar.addEventListener("click", function(e){
+      e.preventDefault();
+      e.stopPropagation();
+      togglePanel();
+      syncSelectedClasses();
+    });
+
+    document.addEventListener("click", function(){
+      try{ closePanel(); }catch(e){}
+    });
+
+    // Reset helper (used when reopening signup)
+    window.__resetSuDobPicker = function(){
+      try{
+        isoEl.value = "";
+        if(dayLbl){ dayLbl.textContent="יום"; dayLbl.removeAttribute("data-val"); }
+        if(monthLbl){ monthLbl.textContent="חודש"; monthLbl.removeAttribute("data-val"); }
+        if(yearLbl){ yearLbl.textContent="שנה"; yearLbl.removeAttribute("data-val"); }
+        syncSelectedClasses();
+        closePanel();
+      }catch(e){}
+    };
+
+    // If value already exists (reopen), reflect it
+    try{
+      var iso = String(isoEl.value||"").trim();
+      var m = iso.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if(m){
+        setSelected("year", String(parseInt(m[1],10)));
+        setSelected("month", String(parseInt(m[2],10)));
+        setSelected("day", String(parseInt(m[3],10)));
+        syncSelectedClasses();
+      }
+    }catch(e){}
+  }catch(e){}
+}
+
 
 function suDigits(s){ return String(s||"").replace(/\D/g,""); }
 function suIsEmail(s){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(s||"").trim()); }
@@ -7954,7 +8712,22 @@ function bindSignupPage(){
     });
   }
 
-  // OTP (demo) - send code for phone verification (currently shows code on screen)
+  
+  // Close buttons
+  var suCloseX = document.getElementById("su_closeX");
+  var suCloseBottom = document.getElementById("su_closeBottom");
+  function suCloseAll(){
+    try{ closeSignupPage(); }catch(e){}
+    try{ setTermsOpen(false); }catch(e){}
+  }
+  if(suCloseX){
+    suCloseX.addEventListener("click", function(e){ e.preventDefault(); e.stopPropagation(); suCloseAll(); });
+  }
+  if(suCloseBottom){
+    suCloseBottom.addEventListener("click", function(e){ e.preventDefault(); e.stopPropagation(); suCloseAll(); });
+  }
+
+// OTP (demo) - send code for phone verification (currently shows code on screen)
   var suSendOtpBtn = document.getElementById("su_sendOtp");
   var suOtpField   = document.getElementById("su_f-otp");
   var suOtpInput   = document.getElementById("su_otp");
@@ -8042,6 +8815,7 @@ function bindSignupPage(){
       var firstName = (document.getElementById("su_firstName")||{}).value || "";
       var lastName  = (document.getElementById("su_lastName")||{}).value || "";
       var tz        = (document.getElementById("su_tz")||{}).value || "";
+      var dob       = (document.getElementById("su_dob")||{}).value || "";
       var licenseType = (document.getElementById("su_licenseType")||{}).value || "";
       var phone     = (document.getElementById("su_phone")||{}).value || "";
       var email     = (document.getElementById("su_email")||{}).value || "";
@@ -8052,6 +8826,7 @@ function bindSignupPage(){
       firstName = String(firstName).trim();
       lastName  = String(lastName).trim();
       tz        = suDigits(tz);
+      dob       = String(dob||"").trim();
       phone     = suDigits(phone);
       email     = String(email).trim();
       email2    = String(email2).trim();
@@ -8063,6 +8838,9 @@ function bindSignupPage(){
 
       var tzOk = (tz.length === 9);
       suSetInvalid("f-tz", !tzOk); if(!tzOk) ok=false;
+
+      var dobOk = !!dob;
+      suSetInvalid("f-dob", !dobOk); if(!dobOk) ok=false;
 
       var phoneOk = (phone.length >= 9);
       suSetInvalid("f-phone", !phoneOk); if(!phoneOk) ok=false;
@@ -8118,6 +8896,7 @@ function bindSignupPage(){
         firstName:firstName,
         lastName:lastName,
         tz:tz,
+        dob:dob,
         licenseType: String(licenseType||"").trim(),
         phone:phone,
         email:email,
@@ -8142,7 +8921,23 @@ function bindSignupPage(){
       var submit = document.getElementById("su_submitBtn");
       if(submit){ submit.disabled = true; submit.textContent = "נרשמת בהצלחה"; }
 
-      // log in and go to profile
+      // If signup started from Secretary profile: register only, do NOT switch session.
+      var __fromSec = false;
+      try{ __fromSec = !!window.__signupFromSecretary; }catch(e){ __fromSec = false; }
+      try{ if(document.body.classList.contains('secretary-mode')) __fromSec = true; }catch(e){}
+      if(__fromSec){
+        try{ window.__signupFromSecretary = false; }catch(e){}
+        setTimeout(function(){
+          try{ toast("נרשם למערכת"); }catch(e){}
+          try{ closeSignupPage(); }catch(e){ try{ closeAllPages(true); }catch(e2){} }
+          // ensure we remain in secretary mode
+          try{ if(typeof enableSecretaryMode === 'function') enableSecretaryMode(true); }catch(e){}
+          try{ if(typeof window.updateMenuRoleSections === 'function') window.updateMenuRoleSections(); }catch(e){}
+        }, 350);
+        return;
+      }
+
+      // Normal flow: log in and go to profile
       setTimeout(function(){
         try{
           loginSuccess(tz);
@@ -8183,6 +8978,16 @@ function bind(){
         toggleProfileMenu();
         updateEdgeHandles();
         updateEdgeHandlePositions();
+      });
+    }
+
+    // Secretary: register student (open signup flow but do NOT switch login to the new student)
+    var secReg = $("secRegisterStudentBtn");
+    if(secReg){
+      secReg.addEventListener('click', function(){
+        try{ window.__signupFromSecretary = true; }catch(e){}
+        try{ if(typeof closeProfileMenu === 'function') closeProfileMenu(); }catch(e){}
+        try{ openSignupPage(); }catch(e){ try{ if(typeof openAuth === 'function') openAuth('signup'); }catch(e2){} }
       });
     }
 
@@ -8436,6 +9241,8 @@ var lo = $("studentLogoutBtn"); if(lo) lo.addEventListener("click", logout);
       if(state && state.loggedIn){
         closeStartOverlay();
         openPage("licenseRequestPage");
+    try{ initDobPicker(); }catch(e){}
+    try{ if(window.__resetDobPicker) window.__resetDobPicker(); }catch(e){}
   try{ if(typeof window.__licenseFlowRefresh==="function") window.__licenseFlowRefresh(); }catch(e){}
       }
     });
@@ -8729,11 +9536,45 @@ obj[dateKey].push({
   tz: tzN || String(tz||''),
   name: (name == null ? '' : String(name)).trim(),
   price: Number(price) || 400,
+  // compatibility for different UIs (secretary overlay expects ts)
+  ts: when,
   orderedAt: when,
   orderedTime: (function(){ try{ const d=new Date(when); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }catch(e){ return ''; } })()
 });
     saveTestOrders(obj);
+
+    // Firebase (best-effort hook; must not affect flow)
+    try{
+      if(window.FBBridge && typeof window.FBBridge.saveTestOrder === 'function'){
+        window.FBBridge.saveTestOrder(dateKey, obj[dateKey][obj[dateKey].length-1]);
+      }
+    }catch(e){}
+
     return true;
+  }
+
+  function removeTestOrderEntryByTxId(txId){
+    var _tx = (txId == null ? '' : String(txId)).trim();
+    if(!_tx) return false;
+    var changed = false;
+    try{
+      var obj = loadTestOrders();
+      var keys = Object.keys(obj||{});
+      for(var ki=0; ki<keys.length; ki++){
+        var dk = keys[ki];
+        var arr = obj[dk];
+        if(!Array.isArray(arr) || !arr.length) continue;
+        var out = [];
+        for(var i=0;i<arr.length;i++){
+          var r = arr[i];
+          if(r && String(r.txId||'').trim() === _tx){ changed = true; continue; }
+          out.push(r);
+        }
+        obj[dk] = out;
+      }
+      if(changed) saveTestOrders(obj);
+    }catch(e){}
+    return changed;
   }
 
   // Backward compatibility: some older blocks referenced loadReports().
@@ -12070,6 +12911,15 @@ try{
   // -------- Overlay open/close --------
   function closeManagerPanel(){
     try{ document.body.classList.remove("manager-open"); }catch(e){}
+    // Secretary: detach temporary Home capture used to close manager overlay
+    try{
+      document.body.classList.remove('sec-manager-overlay-open');
+      var hb = document.getElementById('homeBtn');
+      if(hb && hb.__secMgrCloseCapture){
+        hb.removeEventListener('click', hb.__secMgrCloseCapture, true);
+        hb.__secMgrCloseCapture = null;
+      }
+    }catch(e){}
     var ov = $("managerOverlay");
     if(ov) ov.setAttribute("aria-hidden","true");
     try{ mgrHideAllViews(); }catch(e){}
@@ -12198,6 +13048,17 @@ try{
       ms && ms.forEach && ms.forEach(function(m){ try{ m.setAttribute('aria-hidden','true'); }catch(_){} });
     }catch(e){}
     try{ document.body.classList.add("manager-open"); }catch(e){}
+    // Secretary: show the EXISTING global Home button and use it to close this overlay
+    try{
+      if(document.body.classList.contains('secretary-mode')){
+        document.body.classList.add('sec-manager-overlay-open');
+        var hb = document.getElementById('homeBtn');
+        if(hb && !hb.__secMgrCloseCapture){
+          hb.__secMgrCloseCapture = function(){ try{ closeManagerPanel(); }catch(e){} };
+          hb.addEventListener('click', hb.__secMgrCloseCapture, true);
+        }
+      }
+    }catch(e){}
     var ov = $("managerOverlay");
     if(ov) ov.setAttribute("aria-hidden","false");
     try{ mgrHideAllViews(); }catch(e){}
@@ -16804,7 +17665,7 @@ function shopSetQty(id, delta){
       ov.setAttribute('aria-hidden','false');
       if(!ov.__shopBind){
         ov.__shopBind = true;
-        try{ applySecPaymentTheme(); }catch(e){}
+        try{ applySecPaymentTheme(); try{ window.applySecTestOrdersTheme(); }catch(e){} }catch(e){}
 
         ov.addEventListener('click', function(ev){
           if(ev.target === ov){ closeShopCart(false); }
@@ -18993,18 +19854,7 @@ window.renderBookTestPage = function(){
       return;
     }
 
-    var sysEl = $("btSystemTestDt");
-    var orderBtn = $("btOrderBtn");
-    var sys = (typeof _btGetSystemTestInfo==="function") ? _btGetSystemTestInfo(tz) : {has:false, display:""};
-    try{ if(sysEl) sysEl.textContent = (sys && sys.has) ? sys.display : "—"; }catch(e){}
-    if(sys && sys.has){
-      try{ if(stEl) stEl.textContent = "קיים כבר תאריך (" + sys.display + ")"; }catch(e){}
-      try{ if(orderBtn) orderBtn.setAttribute("disabled","disabled"); }catch(e){}
-      return;
-    }else{
-      try{ if(orderBtn) orderBtn.removeAttribute("disabled"); }catch(e){}
-    }
-
+    // always show current credit
     var credit = 0;
     try{ credit = getCredit(tz); }catch(e){ credit = 0; }
     try{
@@ -19013,22 +19863,26 @@ window.renderBookTestPage = function(){
       if(balEl) balEl.textContent = String(credit);
     }
 
-    function pad2(n){ return String(n).padStart(2,"0"); }
-    function fmtDt(ms){
-      try{
-        var d = new Date(ms);
-        return pad2(d.getDate()) + "/" + pad2(d.getMonth()+1) + "/" + d.getFullYear() + " " + pad2(d.getHours()) + ":" + pad2(d.getMinutes());
-      }catch(e){ return ""; }
+    var sysEl = $("btSystemTestDt");
+    var orderBtn = $("btOrderBtn");
+    var sys = (typeof _btGetSystemTestInfo==="function") ? _btGetSystemTestInfo(tz) : {has:false, display:""};
+    try{ if(sysEl) sysEl.textContent = (sys && sys.has) ? sys.display : "—"; }catch(e){}
+
+    // status: based ONLY on whether a system test date exists
+    if(sys && sys.has){
+      try{ if(stEl) stEl.textContent = "משובץ"; }catch(e){}
+      try{ if(orderBtn) orderBtn.setAttribute("disabled","disabled"); }catch(e){}
+      return;
+    }else{
+      try{ if(orderBtn) orderBtn.removeAttribute("disabled"); }catch(e){}
     }
 
+    try{ if(stEl) stEl.textContent = "ממתין לשיבוץ"; }catch(e){}
+
+    // keep the original "order already made" protection (button disabled) without changing status text
     var found = null;
     try{ found = _findTestOrderInLog(tz); }catch(e){ found = null; }
-
     if(found && found.entry){
-      var when = Number(found.entry.orderedAt || 0);
-      var t = "הוזמן";
-      if(when) t += " (" + fmtDt(when) + ")";
-      if(stEl) stEl.textContent = t;
       try{ var ob=$("btOrderBtn"); if(ob) ob.setAttribute("disabled","disabled"); }catch(e){}
       return;
     }
@@ -19037,15 +19891,9 @@ window.renderBookTestPage = function(){
     var ord = null;
     try{ ord = getOrder(tz); }catch(e){ ord = null; }
     if(ord && ord.orderedAt){
-      var when2 = Number(ord.orderedAt||0);
-      var t2 = "הוזמן";
-      if(when2) t2 += " (" + fmtDt(when2) + ")";
-      if(stEl) stEl.textContent = t2;
       try{ var ob2=$("btOrderBtn"); if(ob2) ob2.setAttribute("disabled","disabled"); }catch(e){}
       return;
     }
-
-    if(stEl) stEl.textContent = "לא הוזמן";
   }catch(e){}
 };
 // --- Test order: reliable binding + atomic charge+log (v7 fix)
@@ -19130,22 +19978,41 @@ function bindBookTestOrder(){
       var ord = null;
       try{ ord = getOrder(tz); }catch(e){ ord = null; }
       if((found && found.entry) || (ord && (ord.orderedAt || ord.status === "ordered"))){
-        showAlready();
-        try{ window.renderBookTestPage(); }catch(e){}
-        return;
+        // Heal stale locks: if there is an "order" marker but no matching ledger charge, allow retry.
+        var lockTx = '';
+        try{ lockTx = String((found && found.entry && found.entry.txId) || (ord && ord.txId) || '').trim(); }catch(e){ lockTx = ''; }
+        var hasCharge = false;
+        if(lockTx){
+          try{
+            var payObj0 = payLsGet(payKeyStudent(tz), {}) || {};
+            if(payObj0 && typeof payObj0 === 'object' && Array.isArray(payObj0.ledger)){
+              for(var li=0; li<payObj0.ledger.length; li++){
+                var le = payObj0.ledger[li];
+                if(le && String(le.id||'') === lockTx){ hasCharge = true; break; }
+              }
+            }
+          }catch(e){ hasCharge = false; }
+        }
+        if(!lockTx || hasCharge){
+          showAlready();
+          try{ window.renderBookTestPage(); }catch(e){}
+          return;
+        }
+        // stale: remove lock markers
+        try{ setOrder(tz, null); }catch(e){}
+        try{ removeTestOrderEntryByTxId(lockTx); }catch(e){}
       }
 
-      // Load student's payments ledger (source of truth for credit/יתרה)
-      var payKey = (typeof keyStudentPayments === "function") ? keyStudentPayments(tz) : ("student_payments_" + tz);
-      var payObj = {};
-      try{ payObj = (typeof payLsGet === "function") ? (payLsGet(payKey, {}) || {}) : {}; }catch(e){ payObj = {}; }
-      try{ if(typeof payEnsureLedger === "function") payObj = payEnsureLedger(payObj, tz); }catch(e){}
-
+      // Load student's balance from the canonical ledger (single source of truth)
       var credit = 0;
       try{
-        credit = Number(payObj.due);
-        if(!isFinite(credit)) credit = getCredit(tz);
-      }catch(e){ credit = getCredit(tz); }
+        if(typeof financeGetStudentBalanceByTz === 'function'){
+          credit = Number(financeGetStudentBalanceByTz(tz, '').balance);
+        }
+      }catch(e){ credit = 0; }
+      if(!isFinite(credit)) {
+        try{ credit = Number(getCredit(tz)); }catch(e){ credit = 0; }
+      }
 
       if(credit < price){
         var missing = Math.max(0, Math.round(price - credit));
@@ -19157,27 +20024,29 @@ function bindBookTestOrder(){
 
       var txId = (typeof makeTxId === "function") ? makeTxId() : ("tx_" + Date.now() + "_" + Math.random().toString(16).slice(2));
 
-      var newCredit = Math.max(0, Math.round(credit - price));
-      try{ setCredit(tz, newCredit); }catch(e){}
-
-      // 1) Charge: add ledger entry (idempotent by admin-log gate above)
+      // 1) Charge (atomic + persistent). If this fails, DO NOT write order/log.
+      var chargeRes = null;
       try{
-        if(typeof payLedgerAdd === "function"){
-          payLedgerAdd(payObj, { u: tz, ts: Date.now(), id: txId, type: "test_order", amount: -price, note: "הזמנת טסט", meta: { txId: txId } });
-        }else{
-          // fallback: write direct credit key
-          setCredit(tz, Math.max(0, Math.round(credit - price)));
+        if(typeof financeChargeTestOrderByTz === 'function'){
+          chargeRes = financeChargeTestOrderByTz(tz, price, { txId: txId, source: 'student_book_test', note: 'הזמנת טסט' });
         }
-        // Persist payments + credit key (used by UI)
-        try{ if(typeof payLsSet === "function") payLsSet(payKey, payObj); }catch(e){}
-        try{
-          var dueNow = Number(payObj.due);
-          if(!isFinite(dueNow)) dueNow = newCredit;
-          DBStorage.setItem(keyStudentCredit(tz), String(Math.round(dueNow)));
-        }catch(e){}
-      }catch(e){}
+      }catch(e){ chargeRes = null; }
 
-      // 2) Write admin log
+      if(!chargeRes || !chargeRes.ok){
+        // show the same insufficient overlay when needed
+        if(chargeRes && chargeRes.reason === 'insufficient'){
+          var missing2 = Math.max(0, Math.round((Number(chargeRes.price)||price) - (Number(chargeRes.balance)||0)));
+          var txt2 = $("btInsufficientText");
+          if(txt2) txt2.textContent = "אין מספיק יתרה בחשבון. חסר " + missing2 + "₪ להזמנת טסט.";
+          openOverlay(overlay);
+        }else{
+          try{ toast('שגיאה: לא הצלחתי לשמור את הזמנת הטסט.'); }catch(e){}
+        }
+        try{ window.renderBookTestPage(); }catch(e){}
+        return;
+      }
+
+      // 2) Write admin log (for secretary reading)
       try{
         var st = null;
         try{ st = (typeof getStudentByTz==="function") ? getStudentByTz(tz) : null; }catch(e){}
@@ -19186,11 +20055,11 @@ function bindBookTestOrder(){
         addTestOrderEntry(tz, nm, price, txId);
       }catch(e){}
 
-      // refresh secretary test orders list (if open)
+      // refresh admin/secretary test orders list (if open)
       try{ if(typeof window.renderTestOrdersFiles==="function") window.renderTestOrdersFiles(); }catch(e){}
+      try{ if(typeof window.openSecTestOrdersOverlay==="function") window.openSecTestOrdersOverlay(); }catch(e){}
 
-
-      // 3) Legacy state (optional)
+      // 3) Legacy state (optional) - only after successful charge
       try{ setOrder(tz, { orderedAt: Date.now(), price: price, status: "ordered", txId: txId }); }catch(e){}
 
       try{ window.renderBookTestPage(); }catch(e){}
@@ -19289,8 +20158,6 @@ if(document.readyState === "loading"){
       about_contact: "צור קשר / תמיכה",
       about_terms: "תנאי שימוש",
       about_privacy: "מדיניות פרטיות",
-      about_note: "* כרגע הפעיל בשלב א: שינוי שפה. שאר ההגדרות נשמרות ויופעלו בשלבים הבאים.",
-
       studentmenu_safety_rules: "כללי בטיחות",
       studentmenu_what_learn: "מה לומדים",
       studentmenu_how_pass_test: "איך עוברים טסט",
@@ -19350,7 +20217,6 @@ if(document.readyState === "loading"){
       about_contact: "تواصل / دعم",
       about_terms: "شروط الاستخدام",
       about_privacy: "سياسة الخصوصية",
-      about_note: "* المرحلة أ: تغيير اللغة. باقي الإعدادات تُحفظ وستُفعّل لاحقًا."
     },
     en: {
       menu_title: "תפריט",
@@ -19399,7 +20265,6 @@ if(document.readyState === "loading"){
       about_contact: "Contact / Support",
       about_terms: "Terms of use",
       about_privacy: "Privacy policy",
-      about_note: "* Stage A active: language switch. Other settings are saved and will be enabled later."
     }
   };
 
@@ -19501,7 +20366,10 @@ if(document.readyState === "loading"){
       }
     }catch(e){}
     try{ if(window.__setSecretaryBgLock) window.__setSecretaryBgLock(false); }catch(e){}
-  }
+  
+    try{ if(typeof applySecPaymentTheme === 'function') applySecPaymentTheme(); }catch(e){}
+    try{ if(window.applySecTestOrdersTheme && typeof window.applySecTestOrdersTheme === 'function') window.applySecTestOrdersTheme(); }catch(e){}
+}
 
   function getTextScalePercent(){
     // Preferred: stored percent (80-140). Backward compatible with old sm/md/lg.
@@ -20665,8 +21533,14 @@ if(miniBtn){
 
       var isSec = false;
       try{
+        // Also honor persisted secMode and the dedicated username "מזכירה" (in case role class wasn't applied yet)
+        var u0 = '';
+        try{ u0 = (window.DBStorage && DBStorage.getItem && (DBStorage.getItem('student_username')||'')) || ''; }catch(e2){ u0=''; }
+        u0 = String(u0||'').trim();
         isSec = document.body.classList.contains('secretary-mode') ||
-                (window.APP_STATE && window.APP_STATE.get && window.APP_STATE.get('userRole') === 'secretary');
+                (window.APP_STATE && window.APP_STATE.get && window.APP_STATE.get('userRole') === 'secretary') ||
+                (function(){ try{ return localStorage.getItem('secMode') === '1'; }catch(e3){ return false; } })() ||
+                (u0 === 'מזכירה');
       }catch(e){ isSec = document.body.classList.contains('secretary-mode'); }
 
 
@@ -21003,14 +21877,11 @@ window.enableSecretaryMode = function(persist){
         ov.style.zIndex = '99999';
         ov.innerHTML = [
           '<div class="pay-modal" id="secTestsRootModal" style="width:min(980px,96vw);max-width:96vw;max-height:90vh;overflow:auto;position:relative;">',
-            '<button type="button" class="pay-close-x" id="secTestOrdersCloseX" aria-label="סגור">×</button>',
             '<div id="secTestOrdersHost" dir="rtl"></div>',
           '</div>'
         ].join('');
         document.body.appendChild(ov);
-        const closeBtn = document.getElementById('secTestOrdersCloseX');
-        if(closeBtn) closeBtn.onclick = function(){ try{ closeOverlay('secTestOrdersOverlay'); }catch(e){} };
-        try{ applySecPaymentTheme(); }catch(e){}
+        try{ applySecPaymentTheme(); try{ window.applySecTestOrdersTheme(); }catch(e){} }catch(e){}
 
         ov.addEventListener('click', function(ev){
           try{
@@ -21022,13 +21893,29 @@ window.enableSecretaryMode = function(persist){
         });
       }
 
+      // Use the EXISTING global Home button (same as other sub-pages).
+      // When this overlay is open, clicking Home should first close the overlay.
+      try{
+        document.body.classList.add('sec-tests-overlay-open');
+        var hb = document.getElementById('homeBtn');
+        if(hb){
+          try{ if(typeof showHomeButton==='function') showHomeButton(); }catch(e){}
+          if(!hb.__secTestsCloseCapture){
+            hb.__secTestsCloseCapture = function(){
+              try{ closeOverlay('secTestOrdersOverlay'); }catch(e){}
+            };
+            hb.addEventListener('click', hb.__secTestsCloseCapture, true);
+          }
+        }
+      }catch(e){}
+
       const host = document.getElementById('secTestOrdersHost');
       if(host){
         host.innerHTML = [
           '<div style="padding:6px 2px 0;">',
             '<div style="display:flex;gap:10px;margin:0 0 14px;">',
-              '<button id="secTestsCurrentBtn" type="button" style="flex:1;min-height:44px;border-radius:14px;border:1px solid rgba(80,255,160,.28);background:rgba(25,110,65,.28);color:#fff;font-weight:800;">הזמנות טסטים</button>',
-              '<button id="secTestsFutureBtn" type="button" style="flex:1;min-height:44px;border-radius:14px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.03);color:#fff;font-weight:800;">טסטים עתידיים</button>',
+              '<button id=\"secTestsCurrentBtn\" type=\"button\" style=\"flex:1;min-height:52px;border-radius:18px;border:2px solid rgba(80,255,160,.45);background:rgba(25,110,65,.28);color:#fff;font-weight:900;font-size:20px;box-shadow:0 6px 16px rgba(0,0,0,.12);\">הזמנות טסטים</button>',
+              '<button id=\"secTestsFutureBtn\" type=\"button\" style=\"flex:1;min-height:52px;border-radius:18px;border:2px solid rgba(255,255,255,.22);background:rgba(255,255,255,.03);color:#fff;font-weight:900;font-size:20px;box-shadow:0 6px 16px rgba(0,0,0,.10);\">טסטים עתידיים</button>',
             '</div>',
             '<div id="secTestsCurrentPanel"></div>',
             '<div id="secTestsFuturePanel" style="display:none;"></div>',
@@ -21046,23 +21933,29 @@ window.enableSecretaryMode = function(persist){
         if(b2){ b2.style.background = current ? 'rgba(255,255,255,.03)' : 'rgba(25,110,65,.28)'; b2.style.borderColor = current ? 'rgba(255,255,255,.14)' : 'rgba(80,255,160,.28)'; }
         if(p1) p1.style.display = current ? 'block' : 'none';
         if(p2) p2.style.display = current ? 'none' : 'block';
+        try{ if(window.applySecTestOrdersTheme) window.applySecTestOrdersTheme(); }catch(e){}
       }
 
       function secRenderOrdersList(){
         const panel = document.getElementById('secTestsCurrentPanel');
         if(!panel) return;
+        var isDay = false;
+        try{ isDay = document.body && document.body.classList && document.body.classList.contains('theme-day'); }catch(e){ isDay = false; }
+        var hintColor = isDay ? '#0f1414' : '#d9d9d9';
+        var mainColor = isDay ? '#0f1414' : '#fff';
         let grouped = {};
         try{ grouped = (typeof loadTestOrders === 'function' ? (loadTestOrders() || {}) : {}); }catch(e){ grouped = {}; }
         const dateKeys = Object.keys(grouped || {}).sort((a,b)=> String(b).localeCompare(String(a)));
         if(!dateKeys.length){
-          panel.innerHTML = '<div style="color:#d9d9d9;font-size:15px;margin:4px 2px 10px;">כל הזמנה מוצלחת נשמרת כאן לפי תאריך.</div>' +
-                            '<div style="color:#fff;font-size:18px;margin:10px 2px;">אין הזמנות להצגה</div>';
+          panel.innerHTML = '<div style="color:'+hintColor+';font-size:15px;margin:4px 2px 10px;">כל הזמנה מוצלחת נשמרת כאן לפי תאריך.</div>' +
+                            '<div style="color:'+mainColor+';font-size:18px;margin:10px 2px;">אין הזמנות להצגה</div>';
+          try{ if(window.applySecTestOrdersTheme) window.applySecTestOrdersTheme(); }catch(e){}
           return;
         }
-        let html = '<div style="color:#d9d9d9;font-size:15px;margin:4px 2px 10px;">כל הזמנה מוצלחת נשמרת כאן לפי תאריך.</div>';
+        let html = '<div style="color:'+hintColor+';font-size:15px;margin:4px 2px 10px;">כל הזמנה מוצלחת נשמרת כאן לפי תאריך.</div>';
         for(const dk of dateKeys){
           const rows = Array.isArray(grouped[dk]) ? grouped[dk].slice() : [];
-          rows.sort((a,b)=> Number((b&&b.ts)||0) - Number((a&&a.ts)||0));
+          rows.sort((a,b)=> Number((b&&(b.ts||b.orderedAt))||0) - Number((a&&(a.ts||a.orderedAt))||0));
           const title = (typeof _dateTitle === 'function') ? _dateTitle(dk) : dk;
           html += '<div style="margin:12px 0 10px;">';
           html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);">';
@@ -21074,7 +21967,7 @@ window.enableSecretaryMode = function(persist){
             const name = (r && r.name != null) ? String(r.name) : '';
             const tz = (r && r.tz != null) ? String(r.tz) : '';
             const price = Number((r && r.price) || 0);
-            const ts = Number((r && r.ts) || 0);
+            const ts = Number((r && (r.ts || r.orderedAt || r.ordered_at || r.time)) || 0);
             const hhmm = ts ? ((typeof _hm === 'function') ? _hm(ts) : new Date(ts).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})) : '—';
             html += '<div style="padding:10px;border-radius:12px;background:rgba(0,0,0,.18);border:1px solid rgba(255,255,255,.07);">';
             html += '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;">';
@@ -21089,6 +21982,7 @@ window.enableSecretaryMode = function(persist){
           html += '</div></div>';
         }
         panel.innerHTML = html;
+        try{ if(window.applySecTestOrdersTheme) window.applySecTestOrdersTheme(); }catch(e){}
       }
 
       function secOpenFutureDayModal(dateKey, rows){
@@ -21097,8 +21991,7 @@ window.enableSecretaryMode = function(persist){
         var title = (typeof _dateTitle === 'function') ? _dateTitle(dateKey) : dateKey;
         var html = '<div id="secFutureDayModal" style="position:fixed;inset:0;z-index:100005;background:rgba(0,0,0,.35);display:grid;place-items:center;padding:14px;" dir="rtl">';
         html += '<div id="secFutureDayModalBox" style="width:min(760px,95vw);max-height:82vh;overflow:auto;background:#08110f;border:1px solid rgba(255,255,255,.12);border-radius:18px;box-shadow:0 12px 40px rgba(0,0,0,.35);padding:12px;position:relative;color:#fff;">';
-        html += '<button type="button" id="secFutureDayCloseX" class="pay-close-x" aria-label="סגור">×</button>';
-        html += '<div style="font-weight:900;font-size:18px;margin:2px 0 12px;">טסטים ליום ' + escHtml(title) + '</div>';
+                html += '<div style="font-weight:900;font-size:18px;margin:2px 0 12px;">טסטים ליום ' + escHtml(title) + '</div>';
         if(!rows || !rows.length){
           html += '<div style="color:#d9d9d9;">אין טסטים ליום זה</div>';
         }else{
@@ -21119,8 +22012,6 @@ window.enableSecretaryMode = function(persist){
         document.body.insertAdjacentHTML('beforeend', html);
         var m = document.getElementById('secFutureDayModal');
         var box = document.getElementById('secFutureDayModalBox');
-        var cx = document.getElementById('secFutureDayCloseX');
-        if(cx) cx.onclick = function(){ try{ m && m.remove(); }catch(e){} };
         if(m){ m.addEventListener('click', function(ev){ try{ if(box && ev && ev.target && !box.contains(ev.target)) m.remove(); }catch(e){} }); }
       }
 
@@ -21133,23 +22024,28 @@ window.enableSecretaryMode = function(persist){
         var year = now.getFullYear();
         var monthNames = ['ינואר','פברואר','מרץ','אפריל','מאי','יוני','יולי','אוגוסט','ספטמבר','אוקטובר','נובמבר','דצמבר'];
         var wd = ['א׳','ב׳','ג׳','ד׳','ה׳','ו׳','ש׳'];
-        var html = '<div style="color:#d9d9d9;font-size:15px;margin:4px 2px 10px;">לוח שנה שנתי. לחיצה על יום פותחת טבלת טסטים של אותו היום.</div>';
-        html += '<div style="color:#fff;font-weight:900;font-size:18px;margin:0 2px 10px;">טסטים עתידיים - '+ year +'</div>';
+        var isDay = false;
+        try{ isDay = document.body && document.body.classList && document.body.classList.contains('theme-day'); }catch(e){ isDay = false; }
+        var hintColor = isDay ? '#0f1414' : '#d9d9d9';
+        var titleColor = isDay ? '#0f1414' : '#fff';
+        var wdColor = isDay ? '#0f1414' : '#b8c7bf';
+        var html = '<div style="color:'+hintColor+';font-size:15px;margin:4px 2px 10px;">לוח שנה שנתי. לחיצה על יום פותחת טבלת טסטים של אותו היום.</div>';
+        html += '<div style="color:'+titleColor+';font-weight:900;font-size:18px;margin:0 2px 10px;">טסטים עתידיים - '+ year +'</div>';
         html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:10px;">';
         for(var mon=0; mon<12; mon++){
           var first = new Date(year, mon, 1);
           var daysInMonth = new Date(year, mon+1, 0).getDate();
           var firstDow = first.getDay();
           html += '<div style="border:1px solid rgba(255,255,255,.1);border-radius:14px;background:rgba(255,255,255,.03);padding:8px;">';
-          html += '<div style="font-weight:800;color:#fff;margin:2px 0 8px;text-align:center;">'+monthNames[mon]+'</div>';
+          html += '<div style="font-weight:800;color:'+titleColor+';margin:2px 0 8px;text-align:center;">'+monthNames[mon]+'</div>';
           html += '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;">';
-          for(var w=0; w<7; w++) html += '<div style="text-align:center;font-size:12px;color:#b8c7bf;padding:4px 0;">'+wd[w]+'</div>';
+          for(var w=0; w<7; w++) html += '<div style="text-align:center;font-size:12px;color:'+wdColor+';padding:4px 0;font-weight:800;">'+wd[w]+'</div>';
           for(var e=0; e<firstDow; e++) html += '<div></div>';
           for(var day=1; day<=daysInMonth; day++){
             var dk = year + '-' + pad2(mon+1) + '-' + pad2(day);
             var rows = grouped[dk] || [];
             var has = rows.length > 0;
-            html += '<button type="button" class="sec-future-day" data-date="'+dk+'" style="min-height:42px;border-radius:10px;border:1px solid '+(has?'rgba(80,255,160,.35)':'rgba(255,255,255,.08)')+';background:'+(has?'rgba(25,110,65,.28)':'rgba(0,0,0,.12)')+';color:#fff;position:relative;font-weight:700;">'+day;
+            html += '<button type="button" class="sec-future-day" data-date="'+dk+'" style="min-height:42px;border-radius:10px;border:1px solid '+(has?(isDay?'rgba(18,110,70,.60)':'rgba(80,255,160,.35)'):(isDay?'rgba(0,0,0,.22)':'rgba(255,255,255,.08)'))+';background:'+(has?(isDay?'rgba(25,150,90,.18)':'rgba(25,110,65,.28)'):(isDay?'rgba(0,0,0,.04)':'rgba(0,0,0,.12)'))+';color:'+(isDay?'#0f1414':'#fff')+';position:relative;font-weight:800;">'+day;
             if(has) html += '<span style="position:absolute;left:4px;top:3px;font-size:10px;color:#b9ffd7;">'+rows.length+'</span>';
             html += '</button>';
           }
@@ -21157,6 +22053,7 @@ window.enableSecretaryMode = function(persist){
         }
         html += '</div>';
         panel.innerHTML = html;
+        try{ if(window.applySecTestOrdersTheme) window.applySecTestOrdersTheme(); }catch(e){}
 
         panel.querySelectorAll('.sec-future-day').forEach(function(btn){
           btn.addEventListener('click', function(){
@@ -21175,6 +22072,8 @@ window.enableSecretaryMode = function(persist){
       secSetTestsTab('current');
       secRenderOrdersList();
       secRenderFutureCalendar();
+
+      try{ window.applySecTestOrdersTheme(); }catch(e){}
 
       try{ openOverlay('secTestOrdersOverlay'); }catch(e){ if(ov){ ov.classList.add('show'); ov.style.display='grid'; } }
       try{ window.__secEnsureTopBackBtn && window.__secEnsureTopBackBtn(); }catch(e){}
@@ -22314,7 +23213,7 @@ function resetSecPaymentForm(){
           };
         }
 
-        try{ applySecPaymentTheme(); }catch(e){}
+        try{ applySecPaymentTheme(); try{ window.applySecTestOrdersTheme(); }catch(e){} }catch(e){}
 
         ov.addEventListener('click', function(ev){
           try{
@@ -22368,18 +23267,26 @@ function resetSecPaymentForm(){
       pickup.sort(function(a,b){return Number(b.createdAt||0)-Number(a.createdAt||0)}); preorder.sort(function(a,b){return Number(b.createdAt||0)-Number(a.createdAt||0)}); waiting.sort(function(a,b){return Number(b.createdAt||0)-Number(a.createdAt||0)});
       return {pickup:pickup, preorder:preorder, waiting:waiting};
     }
-    function rowHtml(o, act){
+    function rowHtml(o, act, isDay){
       var c=Array.isArray(o.items)?o.items.length:0;
-      return '<button type="button" class="lesson-file" data-sec-shop-open="'+escH(String(o.id||''))+'" data-sec-shop-act="'+escH(act)+'" style="width:100%;text-align:right;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:12px;padding:10px 12px;margin:0 0 8px;color:#fff;">'
+      var bg = isDay ? 'rgba(0,0,0,.035)' : 'rgba(255,255,255,.03)';
+      var bd = isDay ? 'rgba(0,0,0,.18)' : 'rgba(255,255,255,.08)';
+      var col = isDay ? '#0f1414' : '#fff';
+      return '<button type="button" class="lesson-file" data-sec-shop-open="'+escH(String(o.id||''))+'" data-sec-shop-act="'+escH(act)+'" style="width:100%;text-align:right;background:'+bg+';border:1px solid '+bd+';border-radius:12px;padding:10px 12px;margin:0 0 8px;color:'+col+';">'
       + '<div class="meta"><div class="title">'+escH(orderStudentLabel(o))+' • '+escH(String(o.id||''))+'</div><div class="sub">'+escH(fmtDt(o.createdAt))+' • '+escH(String(c))+' פריטים • '+escH(String(Math.round(Number(o.total||0)||0)))+'₪</div></div></button>';
     }
+
     function renderList(which){
       var host=document.getElementById('secShopListPanel'); if(!host) return;
       var b=getOrderBuckets(); var arr=(which==='pickup')?b.pickup:((which==='waiting')?b.waiting:b.preorder);
       var ttl=(which==='pickup')?'איסוף':((which==='waiting')?'ממתינים':'הזמנות');
       var note=(which==='pickup')?'עסקאות מהמלאי שמוכנות לטיפול/איסוף.':((which==='waiting')?'הוזמן מהספק וממתין להגעה.':'עסקאות עם פריטים בקטגוריה להזמנה בלבד.');
-      var html='<div style="color:#d9d9d9;font-size:14px;margin:2px 0 10px;">'+escH(note)+'</div><div style="font-weight:900;font-size:18px;margin:0 0 10px;color:#fff;">'+escH(ttl)+'</div>';
-      if(!arr.length) html += '<div class="pm-empty">אין פריטים להצגה</div>'; else for(var i=0;i<arr.length;i++) html += rowHtml(arr[i], which);
+      var isDay = false;
+      try{ isDay = document.body && document.body.classList && document.body.classList.contains('theme-day'); }catch(e){ isDay = false; }
+      var hintColor = isDay ? '#0f1414' : '#d9d9d9';
+      var mainColor = isDay ? '#0f1414' : '#fff';
+      var html='<div style="color:'+hintColor+';font-size:14px;margin:2px 0 10px;">'+escH(note)+'</div><div style="font-weight:900;font-size:18px;margin:0 0 10px;color:'+mainColor+';">'+escH(ttl)+'</div>';
+      if(!arr.length) html += '<div class="pm-empty" style="color:'+mainColor+';">אין פריטים להצגה</div>'; else for(var i=0;i<arr.length;i++) html += rowHtml(arr[i], which, isDay);
       host.innerHTML = html;
       host.querySelectorAll('[data-sec-shop-open]').forEach(function(btn){ btn.addEventListener('click', function(){ openSecShopOrderDetail(btn.getAttribute('data-sec-shop-open')||'', btn.getAttribute('data-sec-shop-act')||'orders'); }); });
     }
@@ -22394,7 +23301,7 @@ function resetSecPaymentForm(){
       var o=findOrderById(orderId); if(!o){ try{ alert('עסקה לא נמצאה'); }catch(e){} return; }
       var old=document.getElementById('secShopDetailModal'); if(old) old.remove();
       var title=(mode==='pickup')?'איסוף':((mode==='waiting')?'ממתינים':'הזמנה');
-      var html='<div id="secShopDetailModal" style="position:fixed;inset:0;z-index:2460;background:rgba(0,0,0,.35);display:grid;place-items:center;padding:14px;" dir="rtl"><div id="secShopDetailBox" style="width:min(760px,95vw);max-height:86vh;overflow:auto;background:#08110f;border:1px solid rgba(255,255,255,.12);border-radius:18px;box-shadow:0 12px 40px rgba(0,0,0,.35);padding:12px;position:relative;color:#fff;"><button type="button" class="pay-close-x" id="secShopDetailCloseX" aria-label="סגור">×</button>';
+      var html='<div id="secShopDetailModal" style="position:fixed;inset:0;z-index:2460;background:rgba(0,0,0,.35);display:grid;place-items:center;padding:14px;" dir="rtl"><div id="secShopDetailBox" style="width:min(760px,95vw);max-height:86vh;overflow:auto;background:#08110f;border:1px solid rgba(255,255,255,.12);border-radius:18px;box-shadow:0 12px 40px rgba(0,0,0,.35);padding:12px;position:relative;color:#fff;">';
       html += '<div style="font-weight:900;font-size:18px;margin:2px 0 10px;">'+escH(title)+' • '+escH(String(o.id||''))+'</div>';
       html += '<div style="display:grid;grid-template-columns:1fr;gap:6px;font-size:14px;color:#d9d9d9;"><div><b style="color:#fff;">תלמיד:</b> '+escH(orderStudentLabel(o))+'</div><div><b style="color:#fff;">סה״כ:</b> '+escH(String(Math.round(Number(o.total||0)||0)))+'₪</div><div><b style="color:#fff;">תאריך:</b> '+escH(fmtDt(o.createdAt))+'</div><div><b style="color:#fff;">סטטוס:</b> '+escH((typeof mgrOrderStatusLabel==='function')?mgrOrderStatusLabel(o.status):String(o.status||'—'))+'</div></div>';
       html += detailItemsTable(o);
@@ -22405,9 +23312,9 @@ function resetSecPaymentForm(){
       document.body.insertAdjacentHTML('beforeend', html);
       var m=document.getElementById('secShopDetailModal'), box=document.getElementById('secShopDetailBox');
       function closeM(){ try{ m&&m.remove(); }catch(e){} }
-      var cx=document.getElementById('secShopDetailCloseX'), cb=document.getElementById('secShopDetailBtnClose');
-      if(cx) cx.onclick=closeM; if(cb) cb.onclick=closeM;
-      if(m) m.addEventListener('click', function(ev){ try{ if(box && ev && ev.target && !box.contains(ev.target)) closeM(); }catch(e){} });
+      var cb=document.getElementById('secShopDetailBtnClose');
+      if(cb) cb.onclick=closeM;
+if(m) m.addEventListener('click', function(ev){ try{ if(box && ev && ev.target && !box.contains(ev.target)) closeM(); }catch(e){} });
       var done=document.getElementById('secShopDetailBtnDone');
       if(done) done.onclick=function(){
         try{
@@ -22424,21 +23331,74 @@ function resetSecPaymentForm(){
     var ov=document.getElementById('secShopOverlay');
     if(!ov){
       ov=document.createElement('div'); ov.id='secShopOverlay'; ov.className='overlay'; ov.style.zIndex='2410';
-      ov.innerHTML='<div class="pay-modal" id="secShopRootModal" style="width:min(980px,96vw);max-width:96vw;max-height:90vh;overflow:auto;position:relative;"><button type="button" class="pay-close-x" id="secShopCloseX" aria-label="סגור">×</button><div id="secShopHost" dir="rtl"></div></div>';
+      ov.innerHTML='<div class="pay-modal" id="secShopRootModal" style="width:min(980px,96vw);max-width:96vw;max-height:90vh;overflow:auto;position:relative;"><div id="secShopHost" dir="rtl"></div></div>';
       document.body.appendChild(ov);
-      var c=document.getElementById('secShopCloseX'); if(c) c.onclick=function(){ try{ closeOverlay("secShopOverlay"); }catch(e){} };
       ov.addEventListener('click', function(ev){ try{ var modal=document.getElementById('secShopRootModal'); if(modal && ev && ev.target && !modal.contains(ev.target)) closeOverlay("secShopOverlay"); }catch(e){} });
     }
     var host=document.getElementById('secShopHost');
     if(host) host.innerHTML='<div style="padding:6px 2px 0;"><div style="display:flex;gap:10px;margin:0 0 14px;flex-wrap:wrap;"><button id="secShopPickupBtn" type="button" style="flex:1;min-width:120px;min-height:44px;border-radius:14px;border:1px solid rgba(80,255,160,.28);background:rgba(25,110,65,.28);color:#fff;font-weight:800;">איסוף</button><button id="secShopOrdersBtn" type="button" style="flex:1;min-width:120px;min-height:44px;border-radius:14px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.03);color:#fff;font-weight:800;">הזמנות</button><button id="secShopWaitingBtn" type="button" style="flex:1;min-width:120px;min-height:44px;border-radius:14px;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.03);color:#fff;font-weight:800;">ממתינים</button></div><div id="secShopListPanel"></div></div>';
     function setTab(which){
-      [['pickup','secShopPickupBtn'],['orders','secShopOrdersBtn'],['waiting','secShopWaitingBtn']].forEach(function(p){ var b=document.getElementById(p[1]); if(!b) return; var on=(p[0]===which); b.style.background=on?'rgba(25,110,65,.28)':'rgba(255,255,255,.03)'; b.style.borderColor=on?'rgba(80,255,160,.28)':'rgba(255,255,255,.14)'; });
-      window.__secShopActiveTab = which; renderList(which);
+      var isDay = false;
+      try{ isDay = document.body && document.body.classList && document.body.classList.contains('theme-day'); }catch(e){ isDay = false; }
+      [['pickup','secShopPickupBtn'],['orders','secShopOrdersBtn'],['waiting','secShopWaitingBtn']].forEach(function(p){
+        var b=document.getElementById(p[1]); if(!b) return;
+        var on=(p[0]===which);
+        if(isDay){
+          b.style.background = on ? 'rgba(25,150,90,.18)' : 'rgba(0,0,0,.03)';
+          b.style.borderColor = on ? 'rgba(18,110,70,.65)' : 'rgba(0,0,0,.22)';
+          b.style.color = '#0f1414';
+          b.style.fontWeight = '900';
+          b.style.fontSize = '18px';
+        }else{
+          b.style.background = on?'rgba(25,110,65,.28)':'rgba(255,255,255,.03)';
+          b.style.borderColor = on?'rgba(80,255,160,.28)':'rgba(255,255,255,.14)';
+          b.style.color = '#fff';
+          b.style.fontWeight = '800';
+        }
+      });
+      window.__secShopActiveTab = which;
+      renderList(which);
+      try{ window.applySecShopTheme && window.applySecShopTheme(); }catch(e){}
     }
     var bp=document.getElementById('secShopPickupBtn'), bo=document.getElementById('secShopOrdersBtn'), bw=document.getElementById('secShopWaitingBtn');
     if(bp) bp.onclick=function(){ setTab('pickup'); }; if(bo) bo.onclick=function(){ setTab('orders'); }; if(bw) bw.onclick=function(){ setTab('waiting'); };
     setTab(window.__secShopActiveTab || 'pickup');
-    try{ if(typeof openOverlay==='function') openOverlay('secShopOverlay'); }catch(e){ if(ov){ ov.classList.add('show'); ov.style.display='grid'; } }
+    
+    // Secretary shop overlay: day-mode theme + reuse existing global Home button (no custom button)
+    window.applySecShopTheme = function(){
+      try{
+        var isDay = false;
+        try{ isDay = document.body && document.body.classList && document.body.classList.contains('theme-day'); }catch(e){ isDay = false; }
+        var modal = document.getElementById('secShopRootModal');
+        if(modal){
+          if(isDay){
+            modal.style.background = '#ffffff';
+            modal.style.color = '#0f1414';
+            modal.style.border = '1px solid rgba(0,0,0,.16)';
+          }else{
+            // Night mode: match app dark UI
+            modal.style.background = '#08110f';
+            modal.style.color = '#ffffff';
+            modal.style.border = '1px solid rgba(255,255,255,.12)';
+          }
+        }
+      }catch(e){}
+    };
+
+    try{
+      document.body.classList.add('sec-shop-overlay-open');
+      var hb = document.getElementById('homeBtn');
+      if(hb){
+        try{ if(typeof showHomeButton==='function') showHomeButton(); }catch(e){}
+        if(!hb.__secSecShopCloseCapture){
+          hb.__secSecShopCloseCapture = function(){ try{ closeOverlay('secShopOverlay'); }catch(e){} };
+          hb.addEventListener('click', hb.__secSecShopCloseCapture, true);
+        }
+      }
+    }catch(e){}
+
+try{ if(typeof openOverlay==='function') openOverlay('secShopOverlay'); }catch(e){ if(ov){ ov.classList.add('show'); ov.style.display='grid'; } }
+    try{ window.applySecShopTheme && window.applySecShopTheme(); }catch(e){}
     try{ window.__secEnsureTopBackBtn && window.__secEnsureTopBackBtn(); }catch(e){}
   };
 
