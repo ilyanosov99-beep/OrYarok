@@ -31,6 +31,9 @@
 </script>
 </head>
 <body>
+<div id="appViewport">
+  <!-- Blur overlay (must be inside appViewport so menus/auth stay ABOVE it) -->
+  <div id="appBlur" aria-hidden="true"></div>
 <div aria-hidden="true" id="homeVignette"></div>
 <template id="pageCloseSliderTpl">
 <div class="page-close-slider" data-page-close-slider="">
@@ -2099,6 +2102,7 @@
 <div class="dock-title" id="dockTitle">הקלדה</div>
 <input autocomplete="off" class="dock-input" id="dockInput" type="text"/>
 <button aria-label="סגור" class="dock-close" id="dockCloseBtn" type="button">✕</button>
+</div>
 </div>
 </div>
 </body>

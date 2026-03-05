@@ -88,13 +88,6 @@
     _mem: mem
   };
 
-  // Firebase bridge stub (best-effort). Real implementation can be injected later.
-  // Must never break the app if Firebase is not connected.
-  try{
-    if(!window.FBBridge) window.FBBridge = {};
-    if(typeof window.FBBridge.saveTestOrder !== 'function') window.FBBridge.saveTestOrder = function(/*dateKey, entry*/){ };
-  }catch(e){}
-
   // Central keys: static keys only. Dynamic keys live under DB.key.*
   var KEYS = {
     studentsRegistry: 'students_registry_v1',
@@ -5886,83 +5879,6 @@ function financeGetStudentBalanceByTz(tz, username){
     return { ok:true, tz:tz, units:units, amount:chargeAmount, balance:dueNow, payObj:payObj };
   }
 
-  // Charge for "הזמנת טסט" (400₪) as a ledger transaction.
-  // MUST be persisted in the same ledger as payments/lessons so later payments won't "refund" it.
-  function financeChargeTestOrderByTz(tz, price, meta){
-    tz = String(tz||'').trim();
-    var amt = Number(price);
-    if(!tz) return { ok:false, reason:'missing_tz' };
-    if(!isFinite(amt) || amt <= 0) amt = 400;
-
-    var m = (meta && typeof meta === 'object') ? meta : {};
-    var txId = String(m.txId || m.id || '') || (typeof makeTxId === 'function' ? makeTxId() : ('tx_' + Date.now() + '_' + Math.random().toString(16).slice(2)));
-    var note = String(m.note || 'הזמנת טסט');
-
-    // Load + ensure ledger
-    var keyP = payKeyStudent(tz);
-    var payObj = payLsGet(keyP, {}) || {};
-    if(!payObj || typeof payObj !== 'object') payObj = {};
-    try{ payEnsureLedger(payObj, tz); }catch(e){}
-
-    // Idempotency: if already charged with same txId, return current balance.
-    try{
-      if(Array.isArray(payObj.ledger)){
-        for(var i=0;i<payObj.ledger.length;i++){
-          var e0 = payObj.ledger[i];
-          if(!e0 || typeof e0 !== 'object') continue;
-          if(String(e0.id||'') === txId) {
-            var due0 = Number(payObj.due);
-            if(!isFinite(due0)) due0 = Number(payLedgerSum(payObj));
-            if(!isFinite(due0)) due0 = 0;
-            return { ok:true, tz:tz, amount:-Math.abs(amt), balance:due0, txId:txId, payObj:payObj, already:true };
-          }
-        }
-      }
-    }catch(e){}
-
-    // Check current balance from ledger
-    var cur = Number(payObj.due);
-    if(!isFinite(cur)) cur = Number(payLedgerSum(payObj));
-    if(!isFinite(cur)) cur = 0;
-    if(cur < amt) return { ok:false, reason:'insufficient', balance:cur, price:amt, txId:txId };
-
-    // Add ledger entry
-    try{
-      payLedgerAdd(payObj, {
-        u: tz,
-        ts: Date.now(),
-        id: txId,
-        type: 'test_order',
-        amount: -Math.abs(amt),
-        note: note,
-        source: String(m.source || 'student_book_test'),
-        meta: (m.meta && typeof m.meta === 'object') ? m.meta : { txId: txId }
-      });
-    }catch(e){
-      return { ok:false, reason:'ledger_add_failed', error:e, txId:txId };
-    }
-
-    var dueNow = Number(payObj.due);
-    if(!isFinite(dueNow)) dueNow = Number(payLedgerSum(payObj));
-    if(!isFinite(dueNow)) dueNow = 0;
-    payObj.due = dueNow;
-
-    // Persist
-    try{ payLsSet(keyP, payObj); }catch(e){ return { ok:false, reason:'persist_failed', error:e, txId:txId }; }
-    try{ DBStorage.setItem(keyStudentCredit(tz), String(Math.round(dueNow))); }catch(e){}
-    try{
-      var prof = payLsGet(payKeyProfile(tz), {}) || {};
-      if(typeof prof !== 'object') prof = {};
-      prof.paymentsDue = dueNow;
-      payLsSet(payKeyProfile(tz), prof);
-    }catch(e){}
-
-    return { ok:true, tz:tz, amount:-Math.abs(amt), balance:dueNow, txId:txId, payObj:payObj };
-  }
-
-  // export for UI flows
-  try{ window.financeChargeTestOrderByTz = financeChargeTestOrderByTz; }catch(e){}
-
   function financeCleanupLegacyStorage(){
     var report = { scanned: 0, migrated: 0, removed: 0, skipped: 0, errors: 0 };
     var seen = {};
@@ -7167,12 +7083,16 @@ function payPrefillReceiptFromProfile(){
 }
 
 function openPaymentModal(presetAmount, presetNote, forceUser){
+    // NOTE: forceUser can be:
+    //  - string TZ (apply payment context to that student)
+    //  - boolean true (bypass boot-block only; DO NOT change activeStudentTz)
+    var __bypassBoot = (forceUser === true);
     try{
-      if(!forceUser && typeof window !== 'undefined' && window.__PAY_BOOT_BLOCK) return;
+      if(!__bypassBoot && !forceUser && typeof window !== 'undefined' && window.__PAY_BOOT_BLOCK) return;
     }catch(e){}
     // v9: force payment context to the student we opened from (prevents receipt details leaking between profiles)
     try{
-      var fk = String(forceUser||"").trim();
+      var fk = (typeof forceUser==="string") ? String(forceUser).trim() : "";
       if(fk){
         if(!window.PAY) window.PAY = {};
         // set active student TZ so payGetUser / prefill use the correct profile
@@ -8435,7 +8355,10 @@ function closeSignupPage(){
       sp.setAttribute("aria-hidden","true");
     }
   }catch(e){}
+  // clear secretary-registration flag if any
+  try{ window.__signupFromSecretary = false; }catch(e){}
 }
+
 
 
 // --- Simple DOB picker for signup (day/month/year) ---
@@ -8924,8 +8847,7 @@ function bindSignupPage(){
       // If signup started from Secretary profile: register only, do NOT switch session.
       var __fromSec = false;
       try{ __fromSec = !!window.__signupFromSecretary; }catch(e){ __fromSec = false; }
-      try{ if(document.body.classList.contains('secretary-mode')) __fromSec = true; }catch(e){}
-      if(__fromSec){
+if(__fromSec){
         try{ window.__signupFromSecretary = false; }catch(e){}
         setTimeout(function(){
           try{ toast("נרשם למערכת"); }catch(e){}
@@ -8940,6 +8862,7 @@ function bindSignupPage(){
       // Normal flow: log in and go to profile
       setTimeout(function(){
         try{
+          try{ closeSignupPage(); }catch(e){}
           loginSuccess(tz);
           if(window.__startSignupOpenLicense){
             window.__startSignupOpenLicense = false;
@@ -9536,45 +9459,11 @@ obj[dateKey].push({
   tz: tzN || String(tz||''),
   name: (name == null ? '' : String(name)).trim(),
   price: Number(price) || 400,
-  // compatibility for different UIs (secretary overlay expects ts)
-  ts: when,
   orderedAt: when,
   orderedTime: (function(){ try{ const d=new Date(when); return String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); }catch(e){ return ''; } })()
 });
     saveTestOrders(obj);
-
-    // Firebase (best-effort hook; must not affect flow)
-    try{
-      if(window.FBBridge && typeof window.FBBridge.saveTestOrder === 'function'){
-        window.FBBridge.saveTestOrder(dateKey, obj[dateKey][obj[dateKey].length-1]);
-      }
-    }catch(e){}
-
     return true;
-  }
-
-  function removeTestOrderEntryByTxId(txId){
-    var _tx = (txId == null ? '' : String(txId)).trim();
-    if(!_tx) return false;
-    var changed = false;
-    try{
-      var obj = loadTestOrders();
-      var keys = Object.keys(obj||{});
-      for(var ki=0; ki<keys.length; ki++){
-        var dk = keys[ki];
-        var arr = obj[dk];
-        if(!Array.isArray(arr) || !arr.length) continue;
-        var out = [];
-        for(var i=0;i<arr.length;i++){
-          var r = arr[i];
-          if(r && String(r.txId||'').trim() === _tx){ changed = true; continue; }
-          out.push(r);
-        }
-        obj[dk] = out;
-      }
-      if(changed) saveTestOrders(obj);
-    }catch(e){}
-    return changed;
   }
 
   // Backward compatibility: some older blocks referenced loadReports().
@@ -19978,41 +19867,22 @@ function bindBookTestOrder(){
       var ord = null;
       try{ ord = getOrder(tz); }catch(e){ ord = null; }
       if((found && found.entry) || (ord && (ord.orderedAt || ord.status === "ordered"))){
-        // Heal stale locks: if there is an "order" marker but no matching ledger charge, allow retry.
-        var lockTx = '';
-        try{ lockTx = String((found && found.entry && found.entry.txId) || (ord && ord.txId) || '').trim(); }catch(e){ lockTx = ''; }
-        var hasCharge = false;
-        if(lockTx){
-          try{
-            var payObj0 = payLsGet(payKeyStudent(tz), {}) || {};
-            if(payObj0 && typeof payObj0 === 'object' && Array.isArray(payObj0.ledger)){
-              for(var li=0; li<payObj0.ledger.length; li++){
-                var le = payObj0.ledger[li];
-                if(le && String(le.id||'') === lockTx){ hasCharge = true; break; }
-              }
-            }
-          }catch(e){ hasCharge = false; }
-        }
-        if(!lockTx || hasCharge){
-          showAlready();
-          try{ window.renderBookTestPage(); }catch(e){}
-          return;
-        }
-        // stale: remove lock markers
-        try{ setOrder(tz, null); }catch(e){}
-        try{ removeTestOrderEntryByTxId(lockTx); }catch(e){}
+        showAlready();
+        try{ window.renderBookTestPage(); }catch(e){}
+        return;
       }
 
-      // Load student's balance from the canonical ledger (single source of truth)
+      // Load student's payments ledger (source of truth for credit/יתרה)
+      var payKey = (typeof keyStudentPayments === "function") ? keyStudentPayments(tz) : ("student_payments_" + tz);
+      var payObj = {};
+      try{ payObj = (typeof payLsGet === "function") ? (payLsGet(payKey, {}) || {}) : {}; }catch(e){ payObj = {}; }
+      try{ if(typeof payEnsureLedger === "function") payObj = payEnsureLedger(payObj, tz); }catch(e){}
+
       var credit = 0;
       try{
-        if(typeof financeGetStudentBalanceByTz === 'function'){
-          credit = Number(financeGetStudentBalanceByTz(tz, '').balance);
-        }
-      }catch(e){ credit = 0; }
-      if(!isFinite(credit)) {
-        try{ credit = Number(getCredit(tz)); }catch(e){ credit = 0; }
-      }
+        credit = Number(payObj.due);
+        if(!isFinite(credit)) credit = getCredit(tz);
+      }catch(e){ credit = getCredit(tz); }
 
       if(credit < price){
         var missing = Math.max(0, Math.round(price - credit));
@@ -20024,29 +19894,27 @@ function bindBookTestOrder(){
 
       var txId = (typeof makeTxId === "function") ? makeTxId() : ("tx_" + Date.now() + "_" + Math.random().toString(16).slice(2));
 
-      // 1) Charge (atomic + persistent). If this fails, DO NOT write order/log.
-      var chargeRes = null;
+      var newCredit = Math.max(0, Math.round(credit - price));
+      try{ setCredit(tz, newCredit); }catch(e){}
+
+      // 1) Charge: add ledger entry (idempotent by admin-log gate above)
       try{
-        if(typeof financeChargeTestOrderByTz === 'function'){
-          chargeRes = financeChargeTestOrderByTz(tz, price, { txId: txId, source: 'student_book_test', note: 'הזמנת טסט' });
-        }
-      }catch(e){ chargeRes = null; }
-
-      if(!chargeRes || !chargeRes.ok){
-        // show the same insufficient overlay when needed
-        if(chargeRes && chargeRes.reason === 'insufficient'){
-          var missing2 = Math.max(0, Math.round((Number(chargeRes.price)||price) - (Number(chargeRes.balance)||0)));
-          var txt2 = $("btInsufficientText");
-          if(txt2) txt2.textContent = "אין מספיק יתרה בחשבון. חסר " + missing2 + "₪ להזמנת טסט.";
-          openOverlay(overlay);
+        if(typeof payLedgerAdd === "function"){
+          payLedgerAdd(payObj, { u: tz, ts: Date.now(), id: txId, type: "test_order", amount: -price, note: "הזמנת טסט", meta: { txId: txId } });
         }else{
-          try{ toast('שגיאה: לא הצלחתי לשמור את הזמנת הטסט.'); }catch(e){}
+          // fallback: write direct credit key
+          setCredit(tz, Math.max(0, Math.round(credit - price)));
         }
-        try{ window.renderBookTestPage(); }catch(e){}
-        return;
-      }
+        // Persist payments + credit key (used by UI)
+        try{ if(typeof payLsSet === "function") payLsSet(payKey, payObj); }catch(e){}
+        try{
+          var dueNow = Number(payObj.due);
+          if(!isFinite(dueNow)) dueNow = newCredit;
+          DBStorage.setItem(keyStudentCredit(tz), String(Math.round(dueNow)));
+        }catch(e){}
+      }catch(e){}
 
-      // 2) Write admin log (for secretary reading)
+      // 2) Write admin log
       try{
         var st = null;
         try{ st = (typeof getStudentByTz==="function") ? getStudentByTz(tz) : null; }catch(e){}
@@ -20055,11 +19923,11 @@ function bindBookTestOrder(){
         addTestOrderEntry(tz, nm, price, txId);
       }catch(e){}
 
-      // refresh admin/secretary test orders list (if open)
+      // refresh secretary test orders list (if open)
       try{ if(typeof window.renderTestOrdersFiles==="function") window.renderTestOrdersFiles(); }catch(e){}
-      try{ if(typeof window.openSecTestOrdersOverlay==="function") window.openSecTestOrdersOverlay(); }catch(e){}
 
-      // 3) Legacy state (optional) - only after successful charge
+
+      // 3) Legacy state (optional)
       try{ setOrder(tz, { orderedAt: Date.now(), price: price, status: "ordered", txId: txId }); }catch(e){}
 
       try{ window.renderBookTestPage(); }catch(e){}
@@ -21623,14 +21491,32 @@ if(miniBtn){
       }catch(e){}
       if(!vh) vh = Math.round(window.innerHeight || 0);
 
+      // base height: lock to the MAX height ever seen (prevents UI jumping when system bars / keyboard appear)
       if(resetBase || !window.__appLockBaseH){
         window.__appLockBaseH = vh;
-      }
-      if(vh > (window.__appLockBaseH || 0) - 40){
+      }else if(vh > (window.__appLockBaseH || 0)){
         window.__appLockBaseH = vh;
       }
+
       if(window.__appLockBaseH && window.__appLockBaseH > 100){
-        try{ document.documentElement.style.setProperty('--app-lock-h', window.__appLockBaseH + 'px'); }catch(e2){}
+        var H = window.__appLockBaseH;
+
+        try{ document.documentElement.style.setProperty('--app-lock-h', H + 'px'); }catch(e2){}
+
+        // Derive stable home layout vars from the locked height (avoid vh in CSS for key anchored elements)
+        try{
+          var adsTop = Math.max(120, Math.min(Math.round(H * 0.18), 150));
+          var adsBottom = Math.max(128, Math.min(Math.round(H * 0.17), 170));
+          var adsH = Math.min(Math.round(H * 0.68), 580);
+
+          // ensure it always fits inside the locked viewport
+          var maxAdsH = Math.max(260, H - adsTop - adsBottom);
+          if(adsH > maxAdsH) adsH = maxAdsH;
+
+          document.documentElement.style.setProperty('--ads-top-px', adsTop + 'px');
+          document.documentElement.style.setProperty('--ads-bottom-px', adsBottom + 'px');
+          document.documentElement.style.setProperty('--ads-height-px', adsH + 'px');
+        }catch(e3){}
       }
     }catch(e){}
   };
@@ -21955,7 +21841,7 @@ window.enableSecretaryMode = function(persist){
         let html = '<div style="color:'+hintColor+';font-size:15px;margin:4px 2px 10px;">כל הזמנה מוצלחת נשמרת כאן לפי תאריך.</div>';
         for(const dk of dateKeys){
           const rows = Array.isArray(grouped[dk]) ? grouped[dk].slice() : [];
-          rows.sort((a,b)=> Number((b&&(b.ts||b.orderedAt))||0) - Number((a&&(a.ts||a.orderedAt))||0));
+          rows.sort((a,b)=> Number((b&&b.ts)||0) - Number((a&&a.ts)||0));
           const title = (typeof _dateTitle === 'function') ? _dateTitle(dk) : dk;
           html += '<div style="margin:12px 0 10px;">';
           html += '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-radius:12px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.08);">';
@@ -21967,7 +21853,7 @@ window.enableSecretaryMode = function(persist){
             const name = (r && r.name != null) ? String(r.name) : '';
             const tz = (r && r.tz != null) ? String(r.tz) : '';
             const price = Number((r && r.price) || 0);
-            const ts = Number((r && (r.ts || r.orderedAt || r.ordered_at || r.time)) || 0);
+            const ts = Number((r && r.ts) || 0);
             const hhmm = ts ? ((typeof _hm === 'function') ? _hm(ts) : new Date(ts).toLocaleTimeString('he-IL',{hour:'2-digit',minute:'2-digit'})) : '—';
             html += '<div style="padding:10px;border-radius:12px;background:rgba(0,0,0,.18);border:1px solid rgba(255,255,255,.07);">';
             html += '<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;">';
