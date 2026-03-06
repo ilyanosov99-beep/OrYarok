@@ -1281,6 +1281,130 @@ function goBackStep(){
     try{ if(typeof __adminExitForumMode === 'function') __adminExitForumMode(); }catch(e){}
   }
 }
+/* ===== Android Back Button Handling (Home Exit Confirm) ===== */
+(function(){
+  function __isCapacitor(){
+    try{ return !!(window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform()); }catch(e){}
+    try{ return !!(window.Capacitor && window.Capacitor.Plugins); }catch(e){}
+    return false;
+  }
+
+  function __ensureExitConfirmUI(){
+    if(document.getElementById('exitConfirmOverlay')) return;
+
+    var style = document.createElement('style');
+    style.id = 'exitConfirmStyle';
+    style.textContent = `
+#exitConfirmOverlay{position:fixed;inset:0;z-index:99999;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,.45);backdrop-filter:blur(2px);-webkit-backdrop-filter:blur(2px)}
+#exitConfirmOverlay.show{display:flex}
+#exitConfirmBox{width:min(86vw,360px);border-radius:18px;padding:18px 16px;box-shadow:0 10px 30px rgba(0,0,0,.35);background:#ffffff;color:#111;font-family:inherit;text-align:center}
+body.night #exitConfirmBox, body.dark #exitConfirmBox{background:#1b1b1b;color:#f2f2f2}
+#exitConfirmTitle{font-size:18px;font-weight:800;margin:2px 0 10px}
+#exitConfirmBtns{display:flex;gap:10px;margin-top:14px}
+#exitConfirmBtns button{flex:1;border:none;border-radius:12px;padding:12px 10px;font-weight:800;font-size:16px}
+#exitConfirmNo{background:#e5e5e5;color:#111}
+body.night #exitConfirmNo, body.dark #exitConfirmNo{background:#2c2c2c;color:#f2f2f2}
+#exitConfirmYes{background:#1fb655;color:#fff}
+`;
+    document.head.appendChild(style);
+
+    var overlay = document.createElement('div');
+    overlay.id = 'exitConfirmOverlay';
+    overlay.innerHTML = `
+      <div id="exitConfirmBox" role="dialog" aria-modal="true" aria-labelledby="exitConfirmTitle">
+        <div id="exitConfirmTitle">האם ברצונך לצאת מהאפליקציה?</div>
+        <div id="exitConfirmBtns">
+          <button id="exitConfirmNo" type="button">לא</button>
+          <button id="exitConfirmYes" type="button">כן</button>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(overlay);
+
+    function hide(){ overlay.classList.remove('show'); }
+
+    overlay.addEventListener('click', function(e){
+      if(e.target === overlay) hide();
+    });
+
+    document.getElementById('exitConfirmNo').addEventListener('click', function(){
+      hide();
+    });
+
+    document.getElementById('exitConfirmYes').addEventListener('click', async function(){
+      try{
+        var cap = window.Capacitor;
+        var App = cap && cap.Plugins && cap.Plugins.App;
+        if(App && typeof App.exitApp === 'function'){
+          App.exitApp();
+          return;
+        }
+      }catch(e){}
+      // Web fallback: try to close (may be ignored by browser)
+      try{ window.close(); }catch(e){}
+      hide();
+    });
+  }
+
+  function __openExitConfirm(){
+    __ensureExitConfirmUI();
+    var overlay = document.getElementById('exitConfirmOverlay');
+    if(overlay) overlay.classList.add('show');
+  }
+  function __closeExitConfirm(){
+    var overlay = document.getElementById('exitConfirmOverlay');
+    if(overlay) overlay.classList.remove('show');
+  }
+  function __isExitConfirmOpen(){
+    var overlay = document.getElementById('exitConfirmOverlay');
+    return !!(overlay && overlay.classList.contains('show'));
+  }
+
+  function __handleBack(){
+    // 1) If confirm is open -> close it
+    if(__isExitConfirmOpen()){
+      __closeExitConfirm();
+      return;
+    }
+
+    // 2) Close top UI layers first
+    try{ if(document.body.classList.contains('auth-open') && typeof closeAuth === 'function'){ closeAuth(); return; } }catch(e){}
+    try{ if(document.body.classList.contains('start-open') && typeof closeStartOverlay === 'function'){ closeStartOverlay(); return; } }catch(e){}
+    try{ if(document.body.classList.contains('pay-open') && typeof closePaymentModal === 'function'){ closePaymentModal(); return; } }catch(e){}
+    try{ if(document.body.classList.contains('shopcart-open') && typeof closeShopCart === 'function'){ closeShopCart(false); return; } }catch(e){}
+    try{ if(document.body.classList.contains('popup-open') && typeof closePopup === 'function'){ closePopup(true); return; } }catch(e){}
+    try{ if((document.body.classList.contains('menu-open') || document.body.classList.contains('menu-closing')) && typeof closeMenu === 'function'){ closeMenu(); return; } }catch(e){}
+    try{ if((document.body.classList.contains('student-menu-open') || document.body.classList.contains('student-menu-closing')) && typeof closeProfileMenu === 'function'){ closeProfileMenu(); return; } }catch(e){}
+
+    // 3) If a page is open -> go back inside app
+    try{
+      if(document.body.classList.contains('page-open') && typeof goBackStep === 'function'){
+        goBackStep();
+        return;
+      }
+    }catch(e){}
+
+    // 4) Home: ask to exit
+    __openExitConfirm();
+  }
+
+  function __bind(){
+    if(!__isCapacitor()) return;
+    try{
+      var cap = window.Capacitor;
+      var App = cap && cap.Plugins && cap.Plugins.App;
+      if(!App || typeof App.addListener !== 'function') return;
+
+      App.addListener('backButton', function(){
+        try{ __handleBack(); }catch(e){}
+      });
+    }catch(e){}
+  }
+
+  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', __bind);
+  else __bind();
+})();
+
 
 
 function openMotoLocation(){window.open("https://www.google.com/maps?q=31.747240,35.209516","_blank");}
